@@ -74,8 +74,8 @@ struct TimelineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            toolbar
-            palette
+            scrollWhenNarrow { toolbar }
+            scrollWhenNarrow { palette }
             fixtureTimeline
         }.padding(.horizontal, 15).padding(.vertical, 8).background(panelBackground)
             .sheet(isPresented: $namingSection) {
@@ -97,9 +97,15 @@ struct TimelineView: View {
             .onChange(of: session.project.id) { _, _ in drag = nil; zoom = 1 }
     }
 
+    private func scrollWhenNarrow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ViewThatFits(in: .horizontal) {
+            content()
+            ScrollView(.horizontal) { content().fixedSize(horizontal: true, vertical: false) }
+        }
+    }
+
     private var toolbar: some View {
         HStack(spacing: 12) {
-            Text("Timeline").font(.headline)
             if let song = session.project.song {
                 Label(song.name, systemImage: "music.note").lineLimit(1).foregroundStyle(.secondary)
             }

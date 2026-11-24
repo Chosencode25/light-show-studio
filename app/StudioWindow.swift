@@ -7,6 +7,7 @@ let panelBackground = Color(red: 0.088, green: 0.103, blue: 0.128)
 
 struct StudioWindow: View {
     let session: ShowSession
+    let layouts: EditorLayoutSettings
     let remote: StudioPhoneRemote
     let updates: ReleaseUpdateChecker
     let version: String
@@ -97,14 +98,7 @@ struct StudioWindow: View {
             header
             Divider()
             if session.workspace == .edit {
-                VSplitView {
-                    HSplitView {
-                        FixtureSidebar(session: session, openPatch: { showPatch = true }).frame(minWidth: 185, idealWidth: 205, maxWidth: 270)
-                        StageView(session: session, interactive: true).frame(minWidth: 345)
-                        StudioInspector(session: session).frame(minWidth: 295, idealWidth: 320, maxWidth: 440)
-                    }.frame(minHeight: 245, idealHeight: 370)
-                    TimelineView(session: session).frame(minHeight: 175, idealHeight: 300)
-                }
+                ProgramEditor(session: session, settings: layouts, openPatch: { showPatch = true })
             } else {
                 HSplitView {
                     StageView(session: session, interactive: false).frame(minWidth: 430)
@@ -170,16 +164,6 @@ struct FixtureSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Fixtures").font(.headline)
-                Spacer()
-                Menu {
-                    ForEach(FixtureKind.allCases) { kind in
-                        Button(kind.rawValue) { session.addFixture(kind) }
-                    }
-                } label: { Image(systemName: "plus") }
-                    .menuIndicator(.hidden).fixedSize().help("Add fixture").disabled(!session.canEdit)
-            }.padding(13)
             List(selection: Binding<StudioSelection?>(get: { session.selection }, set: { session.selection = $0 ?? .all })) {
                 Label("All Fixtures", systemImage: "lightbulb.2").tag(StudioSelection.all)
                 if !session.groups.isEmpty {
@@ -218,7 +202,7 @@ struct StageView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(interactive ? "Fixture Layout" : "Stage Monitor").font(.headline)
+                if !interactive { Text("Stage Monitor").font(.headline) }
                 Spacer()
                 if interactive {
                     Button("Stage Photo", systemImage: "photo") {

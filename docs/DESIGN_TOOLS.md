@@ -8,11 +8,19 @@
 - **Switched plug icons** can match the decoration a relay powers. Select the plug in the Fixture inspector, choose an **Icon**, and click **Apply Patch**. The icon is saved with the show or fixture setup. The plug still switches one relay on or off.
 - **Draw a switched light strip** by choosing the **Light Strip** icon for a switched plug and clicking **Apply Patch**. Select the fixture on the stage or in the sidebar. Drag the two end points to set the length. Double-click a line segment to add a point, then drag it to make a bend. Control-click a point and choose **Remove Point**. The path saves with the show or fixture setup and appears in Show Mode.
 
-Build 7 opens existing shows and setups. Shows saved in build 7 use format 3. Fixture setups continue to use format 2.
+Light Show Studio opens existing shows and setups. Shows save in format 3, and fixture setups save in format 2.
+
+## Program layouts
+
+Choose **Window → Layouts → Stage Design** for the stage preview, fixture list, and inspector. Choose **Show Timing** for the soundtrack, fixture rows, and command toolbar.
+
+Use a panel’s **…** menu to open a panel to its left, right, above, or below. For example, open the **Inspector** to the right of **Timeline** to edit a selected clip. Drag a divider to resize the adjacent panels. Choose **Close Panel** from the same menu to remove a panel and free its space. Each panel opens once per layout, and at least one panel stays open.
+
+Each preset remembers its panel arrangement and divider positions when you switch layouts or reopen the app. **Window → Layouts → Reset Layout** restores the active preset. The open show, playhead, selection, and unsaved work carry across presets.
 
 ## Program fixture rows
 
-Drag the divider above **Timeline** to give it more room. Each fixture has a row, and its name stays visible when you scroll horizontally. Drag a command tile from the palette above the waveform to the fixture row and time you want. The row highlights when it accepts the command. A switched plug accepts On, Off, and Chase. An RGB strip also accepts colors. Moving heads additionally accept dimmer, fade, and movement commands, using their fixture color wheel.
+Open **Show Timing** to give the timeline the editor area, or dock **Timeline** in the current layout. Each fixture has a row, and its name stays visible when you scroll horizontally. Drag a command tile from the palette above the waveform to the fixture row and time you want. The row highlights when it accepts the command. A switched plug accepts On, Off, and Chase. An RGB strip also accepts colors. Moving heads additionally accept dimmer, fade, and movement commands, using their fixture color wheel.
 
 New palette drops create **five-second clips**. A clip dropped near the end of a soundtrack is shortened to fit. Drag a clip's center to move it, or drag either edge to trim it. Zoom in for very short clips. Click a clip to enter a precise length or edit its fixture states. Control-click to remove it. At the end of a clip the underlying program resumes. If clips overlap, the latest-started clip takes precedence.
 

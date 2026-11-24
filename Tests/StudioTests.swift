@@ -454,6 +454,90 @@ struct StudioTests {
         #expect(fresh.stagePhoto == photo && fresh.song == nil && fresh.markers.isEmpty)
     }
 
+    @Test func editorPanelsDockOnEverySideAndCollapseWhenClosed() throws {
+        let defaults = try #require(UserDefaults(suiteName: "LightShowStudioTests." + UUID().uuidString))
+        let settings = EditorLayoutSettings(defaults: defaults)
+        #expect(settings.layout.panels == [.fixtures, .stage, .inspector])
+        settings.select(.showTiming)
+        let size = CGSize(width: 1100, height: 600)
+
+        for side in EditorDockSide.allCases {
+            settings.open(.inspector, beside: .timeline, on: side)
+            let geometry = EditorLayoutGeometry(layout: settings.layout, size: size)
+            let timeline = try #require(geometry.panels[.timeline])
+            let inspector = try #require(geometry.panels[.inspector])
+            switch side {
+            case .left: #expect(inspector.maxX < timeline.minX)
+            case .right: #expect(timeline.maxX < inspector.minX)
+            case .above: #expect(inspector.maxY < timeline.minY)
+            case .below: #expect(timeline.maxY < inspector.minY)
+            }
+            settings.open(.inspector, beside: .timeline, on: .below)
+            #expect(settings.layout.panels.count == 2)
+            settings.close(.inspector)
+            settings.close(.timeline)
+            #expect(settings.layout.panels == [.timeline])
+        }
+    }
+
+    @Test func editorPresetsSaveDockingAndDividerPositionsIndependently() throws {
+        let defaults = try #require(UserDefaults(suiteName: "LightShowStudioTests." + UUID().uuidString))
+        let settings = EditorLayoutSettings(defaults: defaults)
+        let size = CGSize(width: 1100, height: 600)
+        settings.open(.timeline, beside: .stage, on: .below)
+        let stage = EditorLayoutGeometry(layout: settings.layout, size: size)
+        let divider = try #require(stage.dividers.last)
+        settings.resize(divider.id, to: divider.fraction(after: -75))
+        let resized = EditorLayoutGeometry(layout: settings.layout, size: size)
+        let timeline = try #require(resized.panels[.timeline])
+        #expect(timeline.height > (try #require(stage.panels[.timeline])).height)
+        #expect(divider.fraction(after: -10_000) < divider.fraction(after: 10_000))
+
+        settings.select(.showTiming)
+        settings.open(.inspector, beside: .timeline, on: .right)
+        let reopened = EditorLayoutSettings(defaults: defaults)
+        #expect(reopened.preset == .showTiming)
+        #expect(reopened.layout.panels == [.timeline, .inspector])
+        reopened.reset()
+        #expect(reopened.layout.panels == [.timeline])
+        reopened.select(.stageDesign)
+        #expect(EditorLayoutGeometry(layout: reopened.layout, size: size).panels[.timeline] == timeline)
+        reopened.reset()
+        #expect(reopened.layout.panels == [.fixtures, .stage, .inspector])
+        #expect(EditorLayoutSettings(defaults: defaults).layout.panels == reopened.layout.panels)
+    }
+
+    @Test func timelineEditsUseTheSameShowAcrossEditorLayoutChanges() throws {
+        let defaults = try #require(UserDefaults(suiteName: "LightShowStudioTests." + UUID().uuidString))
+        let settings = EditorLayoutSettings(defaults: defaults)
+        let session = ShowSession(defaults: defaults)
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        let fixture = try #require(session.project.lighting.fixtures.first)
+        session.selection = .fixture(fixture.id)
+        session.seek(to: 1)
+        let show = session.project
+
+        settings.select(.showTiming)
+        #expect(session.project == show)
+        #expect(session.position == 1)
+        #expect(session.selection == .fixture(fixture.id))
+        #expect(session.hasUnsavedChanges)
+        #expect(session.placeTimelineCommand(.on, fixtureID: fixture.id, at: 2))
+        let clip = try #require(session.cues.first)
+        session.selectCue(clip.id)
+
+        settings.select(.stageDesign)
+        settings.open(.timeline, beside: .stage, on: .below)
+        #expect(session.selectedCueID == clip.id)
+        session.moveFixtureCommand(cueID: clip.id, fixtureID: fixture.id, to: 4)
+        session.resizeClip(cueID: clip.id, fixtureID: fixture.id, start: 5, end: 9)
+        session.resizeClip(cueID: clip.id, fixtureID: fixture.id, start: 5, end: 8)
+        #expect(session.cues.first?.time == 5 && session.cues.first?.end == 8)
+        #expect(session.project.version == 3)
+    }
+
     private func makeSession() -> ShowSession {
         ShowSession(defaults: UserDefaults(suiteName: "LightShowStudioTests." + UUID().uuidString)!)
     }

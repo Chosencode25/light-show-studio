@@ -1,5 +1,13 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 8 local preview
+
+Added **Window → Layouts** with **Stage Design** for fixtures, stage preview, and inspector, and **Show Timing** for the timeline. The panel menu opens another editor panel to the left, right, above, or below, and closes panels. Drag dividers to resize. The app remembers each preset’s arrangement in preferences, and **Reset Layout** restores the active preset. Both layouts use the same show, playhead, and selection. Show files continue to use format 3.
+
+Xcode 27.0 beta 5 (27A5237l) built the universal macOS 15 Release app with the `LightShowStudio` scheme. The app and the extracted ZIP passed strict signature verification and a file comparison. Running the Release test bundle directly passed 18 of 19 tests, including all three new layout tests. The tests cover docking on all four sides, panel closing, divider persistence, independent preset reset, and inserting, moving, and trimming clips in the same show across layout changes. The phone pairing test also failed on unchanged build 7 in this session, where loopback listener creation is denied. Xcode’s test launcher was blocked from reaching its test manager service.
+
+Hands-on verification is pending. Switch between presets with a show open and unsaved changes, and confirm the playhead and selections carry over. Dock panels on all four sides, drag the dividers, close a panel, reopen the app, and reset each layout. In Show Timing and in a docked timeline, check the waveform and rows, drop a palette command, drag its center, and trim both edges. Verify that the underlying cue resumes when the clip ends.
+
 ## November 24, 2026 · v0.3 build 7
 
 New timeline drops create five-second clips that can be moved from the center or trimmed at either end. Clips stop at their end and let the underlying program resume. The latest-started overlapping clip takes precedence. Older cue points keep their behavior. Shows saved by this build use format 3, and fixture setups continue to use format 2.
