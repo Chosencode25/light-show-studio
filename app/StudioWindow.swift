@@ -191,7 +191,7 @@ struct FixtureSidebar: View {
                 Section("Patch") {
                     ForEach(session.project.lighting.fixtures) { fixture in
                         VStack(alignment: .leading, spacing: 2) {
-                            Label(fixture.name, systemImage: fixture.kind.symbol).lineLimit(1)
+                            Label(fixture.name, systemImage: fixture.symbol).lineLimit(1)
                             Text(fixture.slots.map(String.init).joined(separator: " · "))
                                 .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                         }.tag(StudioSelection.fixture(fixture.id))
@@ -202,16 +202,6 @@ struct FixtureSidebar: View {
             Button("Controller Patch…", systemImage: "slider.horizontal.3", action: openPatch)
                 .disabled(!session.canEdit).frame(maxWidth: .infinity).padding(10)
         }.background(panelBackground)
-    }
-}
-
-extension FixtureKind {
-    var symbol: String {
-        switch self {
-        case .movingHead: "light.beacon.max"
-        case .plug: "powerplug.fill"
-        case .rgb: "light.strip.2"
-        }
     }
 }
 
@@ -343,7 +333,7 @@ struct FixtureNode: View {
     }
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: fixture.kind.symbol)
+            Image(systemName: fixture.symbol)
                 .foregroundStyle(lamp).font(.system(size: 18, weight: .medium))
                 .frame(width: 38, height: 35)
                 .background(lamp.opacity(0.13), in: RoundedRectangle(cornerRadius: 9))

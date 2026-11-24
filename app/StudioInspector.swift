@@ -59,7 +59,7 @@ struct FixtureForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(fixture.kind.rawValue, systemImage: fixture.kind.symbol).font(.headline)
+            Label(fixture.kind.rawValue, systemImage: draft.symbol).font(.headline)
             VStack(spacing: 8) {
                 TextField("Fixture name", text: $draft.name)
                 TextField("Group", text: $draft.group)
@@ -70,6 +70,16 @@ struct FixtureForm: View {
                 }
                 LabeledContent(fixture.kind == .rgb ? "Red relay" : "Address") {
                     TextField("Address", value: $draft.address, format: .number).frame(width: 75)
+                }
+                if fixture.kind == .plug {
+                    Picker("Icon", selection: Binding(
+                        get: { draft.switchedPlugIcon ?? .plug },
+                        set: { draft.switchedPlugIcon = $0 == .plug ? nil : $0 }
+                    )) {
+                        ForEach(SwitchedPlugIcon.allCases) { icon in
+                            Label(icon.label, systemImage: icon.symbol).tag(icon)
+                        }
+                    }
                 }
                 if fixture.kind == .rgb {
                     LabeledContent("Green relay") { TextField("Green relay", value: $draft.green, format: .number).frame(width: 75) }

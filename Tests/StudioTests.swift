@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -28,6 +29,47 @@ struct StudioTests {
         #expect(first.lighting.fixtures.last?.previewPlacement?.origin == position)
         #expect(first.lighting.cues.isEmpty && first.lighting.looks.isEmpty && first.song == nil)
         #expect(Set(first.lighting.fixtures.filter { $0.controllerID == fixture.controllerID }.flatMap(\.slots)).count == 4)
+    }
+
+    @Test func switchedPlugIconsPersistWithoutChangingOutputs() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        session.addFixture(.rgb)
+        let original = try #require(session.project.lighting.fixtures.first)
+        let legacyData = try JSONEncoder().encode(original)
+        #expect(!String(decoding: legacyData, as: UTF8.self).contains("switchedPlugIcon"))
+        let legacy = try JSONDecoder().decode(PatchedFixture.self, from: legacyData)
+        #expect(legacy.symbol == SwitchedPlugIcon.plug.symbol)
+        for icon in SwitchedPlugIcon.allCases {
+            #expect(NSImage(systemSymbolName: icon.symbol, accessibilityDescription: nil) != nil)
+        }
+
+        let entry = FixtureLookEntry(id: original.id, state: .plug(true))
+        session.setCue(LightingCue(name: "Tree On", time: 1, entries: [entry]))
+        session.updateFixture(original.id) { $0.switchedPlugIcon = .tree }
+        let showURL = directory.appendingPathComponent("Decorations.lightshow")
+        try session.write(showURL)
+        let (show, _) = try ShowFiles.load(showURL)
+        let decorated = try #require(show.lighting.fixtures.first)
+        #expect(decorated.symbol == SwitchedPlugIcon.tree.symbol)
+        #expect(decorated.kind == .plug && decorated.slots == original.slots)
+        #expect(show.lighting.cues.first?.entries == [entry])
+        #expect(show.lighting.fixtures.last?.symbol == FixtureKind.rgb.symbol)
+        session.seek(to: 1.1)
+        #expect(session.effectiveState(decorated) == .plug(true))
+        session.undoEdit()
+        #expect(session.project.lighting.fixtures.first == original)
+
+        let setupURL = directory.appendingPathComponent("Decorations.lightsetup")
+        try ShowFiles.saveSetup(FixtureSetup(show: show, name: "Decorations"), to: setupURL)
+        let newShow = try ShowFiles.loadSetup(setupURL).newShow()
+        #expect(newShow.lighting.fixtures.first == decorated)
     }
 
     @Test func patchConflictsAndDuplicateFixtureCueTimesDoNotPartiallyCommit() throws {

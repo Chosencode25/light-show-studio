@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 4
+
+Added nine Switched Plug icons in the Fixture inspector. The selected icon follows each plug in the sidebar, stage, and Show Mode. Show and setup files preserve the choice, and older fixtures default to Plug. Icon choices leave the relay address and cue states intact.
+
+Xcode 27.0 beta 5 (27A5237l) passed all eleven Release tests. The new test checks symbol availability, older fixture data, show and setup saves, cue playback, and undo. The universal app and ZIP passed strict signature verification and file comparisons. Visual acceptance remains pending.
+
 ## November 23, 2026 · v0.3 build 3
 
 Added portable stage photos with opacity and locking, fixture-by-fixture cue edits with Simulation preview, soundtrack waveforms, timeline zoom, and manual beat and section markers with optional snapping. Cues can be moved in groups and duplicated at the playhead, with a single undo per action. Build 3 opens existing shows and setups and writes format 2. See [the design tools guide](DESIGN_TOOLS.md).

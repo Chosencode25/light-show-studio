@@ -289,7 +289,7 @@ struct OperatorPanel: View {
                 Text("Fixture Status").font(.headline)
                 ForEach(session.project.lighting.fixtures) { fixture in
                     VStack(alignment: .leading, spacing: 4) {
-                        Label(fixture.name, systemImage: fixture.kind.symbol)
+                        Label(fixture.name, systemImage: fixture.symbol)
                         Text(session.effectiveState(fixture).label).font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     .padding(9).background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 6))

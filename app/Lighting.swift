@@ -23,11 +23,53 @@ enum FixtureKind: String, CaseIterable, Codable, Identifiable, Sendable {
     case movingHead = "Moving Head", plug = "Switched Plug", rgb = "RGB Strip"
     var id: Self { self }
     var controllerKind: LightingControllerKind { self == .movingHead ? .dmx : .arduino }
+    var symbol: String {
+        switch self {
+        case .movingHead: "light.beacon.max"
+        case .plug: SwitchedPlugIcon.plug.symbol
+        case .rgb: "light.strip.2"
+        }
+    }
+
     var dark: FixtureState {
         switch self {
         case .movingHead: .head(HeadLook())
         case .plug: .plug(false)
         case .rgb: .rgb(.off)
+        }
+    }
+}
+
+enum SwitchedPlugIcon: String, CaseIterable, Codable, Identifiable, Sendable {
+    case plug, strip, tree, stringLights, bulb, star, snowflake, gift, fan
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .plug: "Plug"
+        case .strip: "Light Strip"
+        case .tree: "Tree"
+        case .stringLights: "String Lights"
+        case .bulb: "Light Bulb"
+        case .star: "Star"
+        case .snowflake: "Snowflake"
+        case .gift: "Gift"
+        case .fan: "Fan"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .plug: "powerplug.fill"
+        case .strip: "light.strip.2"
+        case .tree: "tree.fill"
+        case .stringLights: "sparkles"
+        case .bulb: "lightbulb.fill"
+        case .star: "star.fill"
+        case .snowflake: "snowflake"
+        case .gift: "gift.fill"
+        case .fan: "fan.fill"
         }
     }
 }
@@ -64,6 +106,12 @@ struct PatchedFixture: Codable, Equatable, Identifiable, Sendable {
     var green = 2
     var blue = 3
     var previewPlacement: FixturePreviewPlacement?
+    var switchedPlugIcon: SwitchedPlugIcon?
+
+    var symbol: String {
+        guard kind == .plug, let switchedPlugIcon else { return kind.symbol }
+        return switchedPlugIcon.symbol
+    }
 
     var slots: [Int] {
         switch kind {
