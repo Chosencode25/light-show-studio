@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Scheme version="1.7" LastUpgradeVersion="2700">
+  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+    <BuildActionEntries>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="9D0D8F0019B9AC4D4809CB3F" BuildableName="Light Show Studio.app" BlueprintName="LightShowStudio" ReferencedContainer="container:LightShowStudio.xcodeproj" />
+      </BuildActionEntry>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="FF827A1314E3778FACCC6691" BuildableName="LightShowStudioTests.xctest" BlueprintName="LightShowStudioTests" ReferencedContainer="container:LightShowStudio.xcodeproj" />
+      </BuildActionEntry>
+    </BuildActionEntries>
+  </BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+    <Testables>
+      <TestableReference skipped="NO">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="FF827A1314E3778FACCC6691" BuildableName="LightShowStudioTests.xctest" BlueprintName="LightShowStudioTests" ReferencedContainer="container:LightShowStudio.xcodeproj" />
+      </TestableReference>
+    </Testables>
+  </TestAction>
+  <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES">
+    <BuildableProductRunnable runnableDebuggingMode="0">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="9D0D8F0019B9AC4D4809CB3F" BuildableName="Light Show Studio.app" BlueprintName="LightShowStudio" ReferencedContainer="container:LightShowStudio.xcodeproj" />
+    </BuildableProductRunnable>
+  </LaunchAction>
+  <AnalyzeAction buildConfiguration="Debug" />
+  <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES" />
+</Scheme>
