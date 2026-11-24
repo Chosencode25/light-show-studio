@@ -3,32 +3,46 @@ import SwiftUI
 
 struct StudioInspector: View {
     private enum Tab: String, CaseIterable, Identifiable {
-        case fixtures = "Fixture", looks = "Looks", motion = "Motion & Chases"
+        case fixtures = "Fixture", looks = "Looks", motion = "Motion"
         var id: Self { self }
+        var fullName: String { self == .motion ? "Motion & Chases" : rawValue }
     }
 
     let session: ShowSession
     @State private var tab = Tab.fixtures
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Lighting inspector", selection: $tab) {
-                ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
-            }.labelsHidden().pickerStyle(.segmented).padding(10)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 15) {
-                    if let cue = session.selectedCue {
-                        CueInspector(session: session, cue: cue).id(cue.id)
-                        Divider()
+        GeometryReader { panel in
+            VStack(alignment: .leading, spacing: 0) {
+                ViewThatFits(in: .horizontal) {
+                    Picker("Lighting inspector", selection: $tab) {
+                        ForEach(Tab.allCases) { Text($0.rawValue).accessibilityLabel($0.fullName).tag($0) }
+                    }.labelsHidden().pickerStyle(.segmented)
+                    Picker("Lighting inspector", selection: $tab) {
+                        ForEach(Tab.allCases) { Text($0.fullName).tag($0) }
+                    }.labelsHidden()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 15) {
+                        if let cue = session.selectedCue {
+                            CueInspector(session: session, cue: cue).id(cue.id)
+                            Divider()
+                        }
+                        switch tab {
+                        case .fixtures: fixturePanel
+                        case .looks: LookInspector(session: session)
+                        case .motion: MotionInspector(session: session)
+                        }
                     }
-                    switch tab {
-                    case .fixtures: fixturePanel
-                    case .looks: LookInspector(session: session)
-                    case .motion: MotionInspector(session: session)
-                    }
-                }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            }.textFieldStyle(.roundedBorder)
+                    .padding(14)
+                    .frame(width: panel.size.width, alignment: .leading)
+                }
+                .textFieldStyle(.roundedBorder)
+            }
+            .frame(width: panel.size.width, height: panel.size.height, alignment: .topLeading)
         }.background(panelBackground)
     }
 
@@ -62,9 +76,9 @@ struct FixtureForm: View {
             Label(fixture.kind.rawValue, systemImage: draft.symbol).font(.headline)
             VStack(spacing: 8) {
                 FixturePatchFields(session: session, draft: $draft)
-                HStack {
+                InspectorActionPair {
                     Button("Remove Fixture", role: .destructive) { asksDelete = true }
-                    Spacer()
+                } trailing: {
                     Button("Apply Patch") {
                         session.applyFixturePatch(draft)
                     }.buttonStyle(.borderedProminent).disabled(draft == fixture)
@@ -99,12 +113,26 @@ private struct FixturePatchFields: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            LabeledContent("Name") { TextField("Fixture name", text: $draft.name).labelsHidden() }
-            LabeledContent("Group") { TextField("Group", text: $draft.group).labelsHidden() }
-            Picker("Controller", selection: $draft.controllerID) {
-                ForEach(session.project.lighting.controllers.filter { $0.kind == draft.kind.controllerKind }) {
-                    Text($0.name).tag($0.id)
+            field("Name") { TextField("Fixture name", text: $draft.name).labelsHidden() }
+            field("Group") { TextField("Group", text: $draft.group).labelsHidden() }
+            field("Controller") {
+                let controllers = session.project.lighting.controllers.filter { $0.kind == draft.kind.controllerKind }
+                Menu {
+                    ForEach(controllers) { controller in
+                        Button {
+                            draft.controllerID = controller.id
+                        } label: {
+                            if controller.id == draft.controllerID { Label(controller.name, systemImage: "checkmark") }
+                            else { Text(controller.name) }
+                        }
+                    }
+                } label: {
+                    Text(controllers.first { $0.id == draft.controllerID }?.name ?? "Choose Controller")
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
+                .accessibilityLabel("Controller")
+                .accessibilityValue(controllers.first { $0.id == draft.controllerID }?.name ?? "No controller")
             }
             LabeledContent(addressLabel) {
                 TextField(addressLabel, value: $draft.address, format: .number).frame(width: 75)
@@ -129,6 +157,13 @@ private struct FixturePatchFields: View {
                     Text("11 channels").tag(11)
                 }
             }
+        }
+    }
+
+    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            content().frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -176,6 +211,26 @@ struct FixtureEditSheet: View {
         .onDisappear {
             if let issue, session.message == issue { session.message = nil }
         }
+    }
+}
+
+private struct InspectorActionPair<Leading: View, Trailing: View>: View {
+    @ViewBuilder let leading: () -> Leading
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                leading()
+                Spacer(minLength: 8)
+                trailing()
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                leading()
+                trailing()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -318,13 +373,14 @@ struct CueInspector: View {
                     }
                 }
                 fixtureTargets
-                HStack {
+                InspectorActionPair {
                     Button("Preview Cue") { session.previewCue(cue) }.disabled(cue.entries.isEmpty)
+                } trailing: {
                     Button("Release Preview") { session.clearAudition() }
                 }
-                HStack {
+                InspectorActionPair {
                     Button("Delete Cue", role: .destructive) { session.removeCue(cue) }
-                    Spacer()
+                } trailing: {
                     Button("Apply") { session.setCue(cue) }.disabled(cue.entries.isEmpty)
                 }
             }.disabled(!session.canEdit)
@@ -397,9 +453,9 @@ struct MotionInspector: View {
                 }
                 Divider()
             }
-            HStack {
+            InspectorActionPair {
                 Text("Chases").font(.headline)
-                Spacer()
+            } trailing: {
                 Button("Add at Playhead", systemImage: "plus") { session.createChase() }
                     .disabled(!session.canEdit || session.selectedFixtures.isEmpty)
             }

@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 11
+
+Fixed clipping in the docked Inspector. The scroll content follows the panel width, the tab labels fit smaller widths, and fixture patch fields and action buttons reflow as the panel narrows.
+
+Xcode 27.0 beta 5 (27A5237l) passed all 22 Release tests. Offscreen macOS renders of the switched-plug Inspector at 235, 300, and 360 points show both sides of the form and all action buttons. The universal app and ZIP passed strict signature verification and file comparisons.
+
 ## November 24, 2026 · v0.3 build 10
 
 Added **Edit Fixture…** to fixture rows in the Fixtures panel and Timeline. The dialog shares fields and validation with the Fixture inspector, preserves stage placement and cue assignments, and saves the patch in one undoable step.
