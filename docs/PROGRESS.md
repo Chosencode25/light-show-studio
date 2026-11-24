@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 full release
+
+The first full release packages the verified v0.3 build 12 app for Apple Silicon and Intel. The repository landing page includes screenshots captured offscreen with the included Nightfall Demo. The sample package reopens with its own 36-second soundtrack, five fixtures, traced strip, markers, and timed clips. A check confirmed the expected fixture states at 14.7 seconds after extracting the sample ZIP.
+
+Build 12 passed 22 Release tests with Xcode 27.0 beta 5 (27A5237l). The app is ad-hoc signed. See [build history](BUILD_HISTORY.md) for source tags and original app archives.
+
 ## November 24, 2026 · v0.3 build 12
 
 Added **Edit Fixture…** to Stage Preview fixture icons, switched-strip paths, and strip points. The command opens the same fixture editor used by the Fixtures panel and Timeline.

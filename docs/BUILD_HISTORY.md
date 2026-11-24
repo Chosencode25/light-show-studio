@@ -1,6 +1,8 @@
 # Build history
 
-[Download the original universal Mac builds and SHA-256 checksums](https://github.com/Chosencode25/light-show-studio/releases/tag/archive/macos-builds-1-8).
+- [Full v0.3 release](https://github.com/Chosencode25/light-show-studio/releases/tag/v0.3)
+- [Historical builds 1–8](https://github.com/Chosencode25/light-show-studio/releases/tag/archive/macos-builds-1-8)
+- [Historical builds 9–11](https://github.com/Chosencode25/light-show-studio/releases/tag/archive/macos-builds-9-11)
 
 | Build | Milestone | Source snapshot |
 | --- | --- | --- |
@@ -12,6 +14,10 @@
 | v0.3 build 6 | Fixture timeline and command palette | `v0.3-build6` |
 | v0.3 build 7 | Resizable timed clips | `v0.3-build7` |
 | v0.3 build 8 | Editor layout presets and docking | `v0.3-build8` |
+| v0.3 build 9 | Five layouts and Mac commands | `v0.3-build9` |
+| v0.3 build 10 | Right-click editing in Fixtures and Timeline | `v0.3-build10` |
+| v0.3 build 11 | Inspector clipping fix | `v0.3-build11` |
+| v0.3 build 12 | Stage Preview fixture editing and first full release | `v0.3` |
 
 Builds 1 and 2 survive as their original app archives. The earliest recovered source snapshot is build 3. The source tags identify the recovered snapshots in build order.
 
