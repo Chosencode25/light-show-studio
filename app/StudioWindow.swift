@@ -217,6 +217,7 @@ struct FixtureSidebar: View {
 struct StageView: View {
     let session: ShowSession
     let interactive: Bool
+    var editFixture: ((PatchedFixture) -> Void)? = nil
     @State private var moving: UUID?
     @State private var point: CGPoint = .zero
     @State private var photoOptions = false
@@ -289,10 +290,17 @@ struct StageView: View {
                                                rect: rect, size: size, selected: selected && interactive,
                                                interactive: interactive, editable: interactive && session.canEdit,
                                                select: { session.selection = .fixture(fixture.id) },
+                                               editFixture: editFixture.map { action in { action(fixture) } },
                                                update: { session.setStripPath($0, for: fixture.id) })
                                     .zIndex(selected && interactive ? 1 : 0)
                             } else {
                                 FixtureNode(fixture: fixture, state: state, selected: selected)
+                                    .contextMenu {
+                                        if interactive, let editFixture {
+                                            Button("Edit Fixture…", systemImage: "slider.horizontal.3") { editFixture(fixture) }
+                                                .disabled(!session.canEdit)
+                                        }
+                                    }
                                     .position(moving == fixture.id ? point : location(placement.origin, in: rect))
                                     .onTapGesture { if interactive { session.selection = .fixture(fixture.id) } }
                                     .gesture(DragGesture(minimumDistance: 5, coordinateSpace: .named("fixture-stage"))
@@ -357,6 +365,7 @@ private struct StageStripView: View {
     let interactive: Bool
     let editable: Bool
     let select: () -> Void
+    let editFixture: (() -> Void)?
     let update: ([FixturePreviewPoint]) -> Void
     @GestureState private var drag: PointDrag?
 
@@ -382,6 +391,7 @@ private struct StageStripView: View {
                 .contentShape(path.strokedPath(StrokeStyle(lineWidth: 24, lineCap: .round, lineJoin: .round)))
                 .accessibilityLabel("\(fixture.name), \(state.label)")
                 .help("\(fixture.name) · \(state.label)")
+                .contextMenu { editFixtureItem }
             if selected && editable {
                 line.gesture(SpatialTapGesture(count: 2, coordinateSpace: .named("fixture-stage"))
                     .onEnded { insertPoint(near: $0.location, vertices: vertices) })
@@ -427,12 +437,20 @@ private struct StageStripView: View {
                     update(revised)
                 })
             .contextMenu {
+                editFixtureItem
                 Button("Remove Point", role: .destructive) {
                     var revised = points
                     revised.remove(at: index)
                     update(revised)
                 }.disabled(points.count <= 2)
             }
+    }
+
+    @ViewBuilder private var editFixtureItem: some View {
+        if interactive, let editFixture {
+            Button("Edit Fixture…", systemImage: "slider.horizontal.3", action: editFixture)
+                .disabled(!editable)
+        }
     }
 
     private func location(of point: FixturePreviewPoint) -> CGPoint {

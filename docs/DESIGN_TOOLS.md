@@ -38,6 +38,6 @@ Each layout remembers its own panels and divider positions. Use a panel’s **�
 The **Show** and **Timeline** menus provide transport and editing commands. Open **Help → Keyboard Shortcuts** with **⌘/** to search them.
 
 
-## Edit a fixture from its row
+## Edit a fixture
 
-Right-click a fixture in the Fixtures panel or right-click its name in the Timeline. Choose **Edit Fixture…**, change the name, group, controller, channel or relay assignments, or fixture-specific settings such as a switched-plug icon. Click **Apply Patch** to save the changes in one undoable step. Address conflicts are shown in the editor so you can correct them before applying.
+Right-click a fixture in the Fixtures panel, its name in the Timeline, or its icon or strip path in Stage Preview. Choose **Edit Fixture…**, change the name, group, controller, channel or relay assignments, or fixture-specific settings such as a switched-plug icon. Click **Apply Patch** to save the changes in one undoable step. Address conflicts are shown in the editor so you can correct them before applying.

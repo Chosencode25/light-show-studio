@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 12
+
+Added **Edit Fixture…** to Stage Preview fixture icons, switched-strip paths, and strip points. The command opens the same fixture editor used by the Fixtures panel and Timeline.
+
+Xcode 27.0 beta 5 (27A5237l) passed all 22 Release tests. The universal app and ZIP passed strict signature verification and file comparisons. The Stage Preview context menus still need a hands-on check.
+
 ## November 24, 2026 · v0.3 build 11
 
 Fixed clipping in the docked Inspector. The scroll content follows the panel width, the tab labels fit smaller widths, and fixture patch fields and action buttons reflow as the panel narrows.

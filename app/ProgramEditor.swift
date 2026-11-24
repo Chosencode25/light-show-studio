@@ -123,7 +123,7 @@ struct ProgramEditor: View {
     @ViewBuilder private func panelContent(_ panel: EditorPanel) -> some View {
         switch panel {
         case .fixtures: FixtureSidebar(session: session, openPatch: openPatch, editFixture: editFixture)
-        case .stage: StageView(session: session, interactive: true)
+        case .stage: StageView(session: session, interactive: true, editFixture: editFixture)
         case .inspector: StudioInspector(session: session)
         case .timeline: TimelineView(session: session, editFixture: editFixture)
         }
