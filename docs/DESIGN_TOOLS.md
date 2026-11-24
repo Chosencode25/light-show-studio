@@ -6,5 +6,6 @@
 - **Edit a cue** by selecting its diamond or choosing it from **Cues**. In the inspector, add or remove fixtures and change their saved power, color, dimmer, pan, tilt, or gobo settings. **Preview Cue** auditions the draft in Simulation. Click **Apply** to save it or **Release Preview** to return to the timeline.
 
 - **Switched plug icons** can match the decoration a relay powers. Select the plug in the Fixture inspector, choose an **Icon**, and click **Apply Patch**. The icon is saved with the show or fixture setup. The plug still switches one relay on or off.
+- **Draw a switched light strip** by choosing the **Light Strip** icon for a switched plug and clicking **Apply Patch**. Select the fixture on the stage or in the sidebar. Drag the two end points to set the length. Double-click a line segment to add a point, then drag it to make a bend. Control-click a point and choose **Remove Point**. The path saves with the show or fixture setup and appears in Show Mode.
 
 Build 3 reads existing shows and setups. Files saved from this build use format 2 and require build 3 or later.

@@ -294,12 +294,30 @@ final class ShowSession {
     }
 
     func move(_ fixture: PatchedFixture, to point: FixturePreviewPoint) {
-        let end = fixture.previewPlacement?.stripEnd
-        let old = fixture.previewPlacement?.origin
-        let shifted = end.flatMap { end in old.map { old in
-            FixturePreviewPoint(x: min(1,max(0,end.x + point.x - old.x)), y: min(1,max(0,end.y + point.y - old.y)))
-        }}
-        updateFixture(fixture.id) { $0.previewPlacement = FixturePreviewPlacement(origin: point, stripEnd: shifted) }
+        updateFixture(fixture.id) { current in
+            var placement = current.previewPlacement ?? FixturePreviewPlacement(origin: point)
+            let dx = point.x - placement.origin.x
+            let dy = point.y - placement.origin.y
+            func shifted(_ vertex: FixturePreviewPoint) -> FixturePreviewPoint {
+                FixturePreviewPoint(x: min(1, max(0, vertex.x + dx)), y: min(1, max(0, vertex.y + dy)))
+            }
+            placement.origin = point
+            placement.stripEnd = placement.stripEnd.map(shifted)
+            placement.stripBends = placement.stripBends?.map(shifted)
+            current.previewPlacement = placement
+        }
+    }
+
+    func setStripPath(_ points: [FixturePreviewPoint], for fixtureID: UUID) {
+        guard (2...FixturePreviewPlacement.maximumStripPoints).contains(points.count),
+              let start = points.first, let end = points.last else { return }
+        let bends = points.dropFirst().dropLast()
+        let placement = FixturePreviewPlacement(origin: start, stripEnd: end,
+                                                 stripBends: bends.isEmpty ? nil : Array(bends))
+        updateFixture(fixtureID) { fixture in
+            guard fixture.drawsStrip else { return }
+            fixture.previewPlacement = placement
+        }
     }
 
     func updateFixture(_ id: UUID, _ change: (inout PatchedFixture) -> Void) {

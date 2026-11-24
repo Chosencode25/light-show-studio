@@ -272,28 +272,47 @@ struct StageView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         ForEach(Array(session.project.lighting.fixtures.enumerated()), id: \.element.id) { index, fixture in
-                            let origin = fixture.previewPlacement?.origin ?? FixturePreviewPlacement.initial(index: index, kind: fixture.kind).origin
+                            let placement = fixture.previewPlacement ?? .initial(index: index, kind: fixture.kind)
                             let state = session.effectiveState(fixture)
                             let selected = session.selection == .fixture(fixture.id)
-                            FixtureNode(fixture: fixture, state: state, selected: selected)
-                                .position(moving == fixture.id ? point : location(origin, in: rect))
-                                .onTapGesture { if interactive { session.selection = .fixture(fixture.id) } }
-                                .gesture(DragGesture(minimumDistance: 5, coordinateSpace: .named("fixture-stage"))
-                                    .onChanged { event in
-                                        guard interactive && session.canEdit else { return }
-                                        moving = fixture.id
-                                        point = bounded(event.location, in: rect)
-                                    }
-                                    .onEnded { event in
-                                        defer { moving = nil }
-                                        guard interactive, session.canEdit, moving == fixture.id, rect.width > 0, rect.height > 0 else { return }
-                                        let end = bounded(event.location, in: rect)
-                                        session.move(fixture, to: FixturePreviewPoint(x: (end.x - rect.minX)/rect.width, y: (end.y - rect.minY)/rect.height))
-                                        session.selection = .fixture(fixture.id)
-                                    })
+                            if fixture.drawsStrip {
+                                StageStripView(fixture: fixture, state: state, points: placement.stripPoints,
+                                               rect: rect, size: size, selected: selected && interactive,
+                                               interactive: interactive, editable: interactive && session.canEdit,
+                                               select: { session.selection = .fixture(fixture.id) },
+                                               update: { session.setStripPath($0, for: fixture.id) })
+                                    .zIndex(selected && interactive ? 1 : 0)
+                            } else {
+                                FixtureNode(fixture: fixture, state: state, selected: selected)
+                                    .position(moving == fixture.id ? point : location(placement.origin, in: rect))
+                                    .onTapGesture { if interactive { session.selection = .fixture(fixture.id) } }
+                                    .gesture(DragGesture(minimumDistance: 5, coordinateSpace: .named("fixture-stage"))
+                                        .onChanged { event in
+                                            guard interactive && session.canEdit else { return }
+                                            moving = fixture.id
+                                            point = bounded(event.location, in: rect)
+                                        }
+                                        .onEnded { event in
+                                            defer { moving = nil }
+                                            guard interactive, session.canEdit, moving == fixture.id, rect.width > 0, rect.height > 0 else { return }
+                                            let end = bounded(event.location, in: rect)
+                                            session.move(fixture, to: FixturePreviewPoint(x: (end.x - rect.minX)/rect.width, y: (end.y - rect.minY)/rect.height))
+                                            session.selection = .fixture(fixture.id)
+                                        })
+                            }
                         }
                     }
                 }.coordinateSpace(name: "fixture-stage").clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .overlay(alignment: .bottomLeading) {
+                if interactive, session.canEdit, case .fixture(let id) = session.selection,
+                   session.project.lighting.fixtures.contains(where: { $0.id == id && $0.drawsStrip }) {
+                    Text("Drag points to reshape • Double-click the line to add a point")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 4)
+                        .allowsHitTesting(false)
+                }
             }
         }.padding(16)
             .task(id: session.project.stagePhoto?.data) {
@@ -316,6 +335,134 @@ struct StageView: View {
 
     private func bounded(_ point: CGPoint, in rect: CGRect) -> CGPoint {
         CGPoint(x: min(rect.maxX, max(rect.minX, point.x)), y: min(rect.maxY, max(rect.minY, point.y)))
+    }
+}
+
+private struct StageStripView: View {
+    let fixture: PatchedFixture
+    let state: FixtureState
+    let points: [FixturePreviewPoint]
+    let rect: CGRect
+    let size: CGSize
+    let selected: Bool
+    let interactive: Bool
+    let editable: Bool
+    let select: () -> Void
+    let update: ([FixturePreviewPoint]) -> Void
+    @GestureState private var drag: PointDrag?
+
+    private struct PointDrag {
+        let index: Int
+        let location: FixturePreviewPoint
+    }
+
+    var body: some View {
+        let vertices = points.indices.map { index in
+            let point = drag?.index == index ? drag?.location ?? points[index] : points[index]
+            return location(of: point)
+        }
+        let path = Path { $0.addLines(vertices) }
+        let lamp: Color = state == .plug(true) ? .yellow : .gray
+        let style = StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+        ZStack(alignment: .topLeading) {
+            if selected {
+                path.stroke(studioAccent, style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round))
+                    .allowsHitTesting(false)
+            }
+            let line = path.stroke(lamp, style: style)
+                .contentShape(path.strokedPath(StrokeStyle(lineWidth: 24, lineCap: .round, lineJoin: .round)))
+                .accessibilityLabel("\(fixture.name), \(state.label)")
+                .help("\(fixture.name) · \(state.label)")
+            if selected && editable {
+                line.gesture(SpatialTapGesture(count: 2, coordinateSpace: .named("fixture-stage"))
+                    .onEnded { insertPoint(near: $0.location, vertices: vertices) })
+            } else if interactive {
+                line.onTapGesture(perform: select)
+            } else {
+                line.allowsHitTesting(false)
+            }
+            if let anchor = vertices.first {
+                Text(fixture.name).font(.caption2).lineLimit(1).padding(.horizontal, 4)
+                    .background(studioBackground.opacity(0.85))
+                    .frame(maxWidth: 105)
+                    .position(x: anchor.x, y: anchor.y + 18)
+                    .allowsHitTesting(false)
+            }
+
+            if selected && editable {
+                ForEach(vertices.indices, id: \.self) { index in
+                    handle(at: index).position(vertices[index])
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    private func handle(at index: Int) -> some View {
+        Circle().fill(studioBackground)
+            .overlay { Circle().strokeBorder(studioAccent, lineWidth: 2) }
+            .frame(width: 12, height: 12)
+            .frame(width: 22, height: 22)
+            .contentShape(Circle())
+            .accessibilityLabel("Strip point \(index + 1)")
+            .help("Drag to move. Control-click to remove.")
+            .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("fixture-stage"))
+                .updating($drag) { event, current, _ in
+                    guard let point = draggedPoint(index, by: event.translation) else { return }
+                    current = PointDrag(index: index, location: point)
+                }
+                .onEnded { event in
+                    guard let point = draggedPoint(index, by: event.translation) else { return }
+                    var revised = points
+                    revised[index] = point
+                    update(revised)
+                })
+            .contextMenu {
+                Button("Remove Point", role: .destructive) {
+                    var revised = points
+                    revised.remove(at: index)
+                    update(revised)
+                }.disabled(points.count <= 2)
+            }
+    }
+
+    private func location(of point: FixturePreviewPoint) -> CGPoint {
+        CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
+    }
+
+    private func draggedPoint(_ index: Int, by offset: CGSize) -> FixturePreviewPoint? {
+        let start = location(of: points[index])
+        return normalized(CGPoint(x: start.x + offset.width, y: start.y + offset.height))
+    }
+
+    private func normalized(_ location: CGPoint) -> FixturePreviewPoint? {
+        guard rect.width > 0, rect.height > 0 else { return nil }
+        return FixturePreviewPoint(
+            x: min(1, max(0, (location.x - rect.minX) / rect.width)),
+            y: min(1, max(0, (location.y - rect.minY) / rect.height))
+        )
+    }
+
+    private func insertPoint(near location: CGPoint, vertices: [CGPoint]) {
+        guard points.count < FixturePreviewPlacement.maximumStripPoints else { return }
+        var nearest: (index: Int, point: CGPoint, distance: CGFloat)?
+        for index in vertices.indices.dropFirst() {
+            let start = vertices[index - 1]
+            let end = vertices[index]
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let lengthSquared = dx * dx + dy * dy
+            guard lengthSquared > 0 else { continue }
+            let fraction = ((location.x - start.x) * dx + (location.y - start.y) * dy) / lengthSquared
+            guard fraction > 0, fraction < 1 else { continue }
+            let point = CGPoint(x: start.x + dx * fraction, y: start.y + dy * fraction)
+            let distance = hypot(location.x - point.x, location.y - point.y)
+            if distance < (nearest?.distance ?? .infinity) { nearest = (index, point, distance) }
+        }
+        guard let nearest, let point = normalized(nearest.point) else { return }
+        var revised = points
+        revised.insert(point, at: nearest.index)
+        update(revised)
     }
 }
 

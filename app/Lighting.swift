@@ -82,10 +82,22 @@ struct FixturePreviewPoint: Codable, Equatable, Sendable {
 }
 
 struct FixturePreviewPlacement: Codable, Equatable, Sendable {
+    static let maximumStripPoints = 64
+
     var origin: FixturePreviewPoint
     var stripEnd: FixturePreviewPoint?
+    var stripBends: [FixturePreviewPoint]?
 
-    var isValid: Bool { origin.isValid && stripEnd?.isValid != false }
+    var isValid: Bool {
+        origin.isValid && stripEnd?.isValid != false &&
+            (stripBends?.count ?? 0) <= Self.maximumStripPoints - 2 &&
+            stripBends?.allSatisfy(\.isValid) != false
+    }
+
+    var stripPoints: [FixturePreviewPoint] {
+        let defaultEnd = FixturePreviewPoint(x: origin.x + (origin.x <= 0.85 ? 0.15 : -0.15), y: origin.y)
+        return [origin] + (stripBends ?? []) + [stripEnd ?? defaultEnd]
+    }
 
     static func initial(index: Int, kind: FixtureKind) -> Self {
         let column = Double(index % 4)
@@ -112,6 +124,8 @@ struct PatchedFixture: Codable, Equatable, Identifiable, Sendable {
         guard kind == .plug, let switchedPlugIcon else { return kind.symbol }
         return switchedPlugIcon.symbol
     }
+
+    var drawsStrip: Bool { kind == .plug && switchedPlugIcon == .strip }
 
     var slots: [Int] {
         switch kind {

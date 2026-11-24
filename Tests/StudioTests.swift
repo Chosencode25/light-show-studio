@@ -72,6 +72,51 @@ struct StudioTests {
         #expect(newShow.lighting.fixtures.first == decorated)
     }
 
+    @Test func switchedStripPointsCanBeEditedAndSavedWithoutChangingThePatch() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        session.addFixture(.rgb)
+        let fixture = try #require(session.project.lighting.fixtures.first)
+        let rgb = try #require(session.project.lighting.fixtures.last)
+        session.updateFixture(fixture.id) { $0.switchedPlugIcon = .strip }
+        let straight = try #require(session.project.lighting.fixtures.first?.previewPlacement)
+        #expect(straight.stripPoints.count == 2 && straight.stripPoints.first != straight.stripPoints.last)
+        let points: [FixturePreviewPoint] = [
+            .init(x: 0.1, y: 0.7), .init(x: 0.35, y: 0.25),
+            .init(x: 0.6, y: 0.25), .init(x: 0.85, y: 0.7)
+        ]
+        session.setStripPath(points, for: fixture.id)
+        session.setStripPath(points, for: rgb.id)
+        let routed = try #require(session.project.lighting.fixtures.first)
+        #expect(routed.previewPlacement?.stripPoints == points && routed.slots == fixture.slots)
+        #expect(session.project.lighting.fixtures.last == rgb)
+
+        var revised = points
+        revised.remove(at: 1)
+        revised[2].y = 0.4
+        session.setStripPath(revised, for: fixture.id)
+        #expect(session.project.lighting.fixtures.first?.previewPlacement?.stripPoints == revised)
+        session.setStripPath([points[0], .init(x: 1.5, y: 0.5), points[3]], for: fixture.id)
+        #expect(session.project.lighting.fixtures.first?.previewPlacement?.stripPoints == revised)
+        session.undoEdit()
+        #expect(session.project.lighting.fixtures.first == routed)
+
+        let showURL = directory.appendingPathComponent("Roofline.lightshow")
+        try session.write(showURL)
+        let (show, _) = try ShowFiles.load(showURL)
+        #expect(show.lighting.fixtures.first?.previewPlacement?.stripPoints == points)
+        let setupURL = directory.appendingPathComponent("Roofline.lightsetup")
+        try ShowFiles.saveSetup(FixtureSetup(show: show, name: "Roofline"), to: setupURL)
+        let newShow = try ShowFiles.loadSetup(setupURL).newShow()
+        #expect(newShow.lighting.fixtures.first == routed)
+    }
+
     @Test func patchConflictsAndDuplicateFixtureCueTimesDoNotPartiallyCommit() throws {
         let session = makeSession()
         defer { session.finish() }

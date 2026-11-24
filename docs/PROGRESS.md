@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 5
+
+Switched plugs using the Light Strip icon now draw a path on the stage. Drag the endpoints to adjust the strip, double-click a segment to add a bend, or Control-click a point to remove it. The geometry appears in Show Mode and is saved with shows and fixture setups.
+
+Xcode 27.0 beta 5 (27A5237l) passed all twelve Release tests. The new test checks default and edited geometry, invalid points, relay assignment, undo, and persistence. The universal app and ZIP passed strict signature verification and file comparisons. Visual acceptance remains pending.
+
 ## November 24, 2026 · v0.3 build 4
 
 Added nine Switched Plug icons in the Fixture inspector. The selected icon follows each plug in the sidebar, stage, and Show Mode. Show and setup files preserve the choice, and older fixtures default to Plug. Icon choices leave the relay address and cue states intact.
