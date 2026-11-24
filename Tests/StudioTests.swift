@@ -270,6 +270,43 @@ struct StudioTests {
         #expect(session.cues.first?.entries == [plug])
     }
 
+    @Test func fixturePatchEditsTheRequestedFixtureAndPreservesPlacementAndCues() throws {
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        session.addFixture(.plug)
+        let fixtures = session.project.lighting.fixtures
+        let other = fixtures[0]
+        let target = fixtures[1]
+        let cue = LightingCue(name: "Roof On", time: 1, entries: [.init(id: target.id, state: .plug(true))])
+        session.setCue(cue)
+        session.selection = .fixture(other.id)
+        let position = FixturePreviewPoint(x: 0.84, y: 0.26)
+        session.move(target, to: position)
+        let baseline = session.project
+
+        var draft = target
+        draft.name = "Roof Strip"
+        draft.group = "Roof"
+        draft.switchedPlugIcon = .strip
+        draft.address = other.address
+        #expect(!session.applyFixturePatch(draft))
+        #expect(session.project == baseline)
+
+        draft.address = 5
+        #expect(session.applyFixturePatch(draft))
+        let edited = try #require(session.project.lighting.fixtures.last)
+        #expect(edited.name == "Roof Strip" && edited.group == "Roof")
+        #expect(edited.switchedPlugIcon == .strip && edited.slots == [5])
+        #expect(edited.previewPlacement?.origin == position)
+        #expect(session.project.lighting.fixtures.first == other)
+        #expect(session.project.lighting.cues == [cue])
+        #expect(session.selection == .fixture(other.id))
+        session.undoEdit()
+        #expect(session.project == baseline)
+    }
+
     @Test func patchConflictsAndDuplicateFixtureCueTimesDoNotPartiallyCommit() throws {
         let session = makeSession()
         defer { session.finish() }

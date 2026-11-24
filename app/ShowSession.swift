@@ -324,10 +324,18 @@ final class ShowSession {
         }
     }
 
-    func updateFixture(_ id: UUID, _ change: (inout PatchedFixture) -> Void) {
-        edit {
-            guard let index = $0.lighting.fixtures.firstIndex(where: { $0.id == id }) else { return }
-            change(&$0.lighting.fixtures[index])
+    @discardableResult
+    func updateFixture(_ id: UUID, _ change: (inout PatchedFixture) -> Void) -> Bool {
+        guard let index = project.lighting.fixtures.firstIndex(where: { $0.id == id }) else { return false }
+        return edit { change(&$0.lighting.fixtures[index]) }
+    }
+
+    @discardableResult
+    func applyFixturePatch(_ draft: PatchedFixture) -> Bool {
+        updateFixture(draft.id) { current in
+            var patch = draft
+            patch.previewPlacement = current.previewPlacement
+            current = patch
         }
     }
 

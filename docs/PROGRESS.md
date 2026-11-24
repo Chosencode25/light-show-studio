@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 10
+
+Added **Edit Fixture…** to fixture rows in the Fixtures panel and Timeline. The dialog shares fields and validation with the Fixture inspector, preserves stage placement and cue assignments, and saves the patch in one undoable step.
+
+Xcode 27.0 beta 5 (27A5237l) passed all 22 Release tests. The new test checks patch conflicts, applying changes to the intended fixture, preserving geometry and cue assignments, and undo. The universal app and ZIP passed strict signature verification and file comparisons. Right-click interaction still needs a hands-on check.
+
 ## November 24, 2026 · v0.3 build 9
 
 Added Show Overview, Cue Editing, and Fixture Patch presets. Program has a layout picker, panel expansion preserves the saved arrangement, and the Window menu can show or hide individual panels. The new Show and Timeline command menus share the existing transport and editor state. Help has a searchable shortcut reference. The one-word chat commands are recorded in [the project guide](CHAT_COMMANDS.md).

@@ -61,46 +61,12 @@ struct FixtureForm: View {
         VStack(alignment: .leading, spacing: 10) {
             Label(fixture.kind.rawValue, systemImage: draft.symbol).font(.headline)
             VStack(spacing: 8) {
-                TextField("Fixture name", text: $draft.name)
-                TextField("Group", text: $draft.group)
-                Picker("Controller", selection: $draft.controllerID) {
-                    ForEach(session.project.lighting.controllers.filter { $0.kind == fixture.kind.controllerKind }) {
-                        Text($0.name).tag($0.id)
-                    }
-                }
-                LabeledContent(fixture.kind == .rgb ? "Red relay" : "Address") {
-                    TextField("Address", value: $draft.address, format: .number).frame(width: 75)
-                }
-                if fixture.kind == .plug {
-                    Picker("Icon", selection: Binding(
-                        get: { draft.switchedPlugIcon ?? .plug },
-                        set: { draft.switchedPlugIcon = $0 == .plug ? nil : $0 }
-                    )) {
-                        ForEach(SwitchedPlugIcon.allCases) { icon in
-                            Label(icon.label, systemImage: icon.symbol).tag(icon)
-                        }
-                    }
-                }
-                if fixture.kind == .rgb {
-                    LabeledContent("Green relay") { TextField("Green relay", value: $draft.green, format: .number).frame(width: 75) }
-                    LabeledContent("Blue relay") { TextField("Blue relay", value: $draft.blue, format: .number).frame(width: 75) }
-                }
-                if fixture.kind == .movingHead {
-                    Picker("Profile", selection: $draft.headChannels) {
-                        Text("9 channels").tag(9)
-                        Text("11 channels").tag(11)
-                    }
-                }
+                FixturePatchFields(session: session, draft: $draft)
                 HStack {
                     Button("Remove Fixture", role: .destructive) { asksDelete = true }
                     Spacer()
                     Button("Apply Patch") {
-                        let changes = draft
-                        session.updateFixture(fixture.id) { current in
-                            let placement = current.previewPlacement
-                            current = changes
-                            current.previewPlacement = placement
-                        }
+                        session.applyFixturePatch(draft)
                     }.buttonStyle(.borderedProminent).disabled(draft == fixture)
                 }
             }.disabled(!session.canEdit)
@@ -115,6 +81,100 @@ struct FixtureForm: View {
             Button("Remove Fixture", role: .destructive) { session.removeFixture(fixture) }
         } message: {
             Text("Its entries will be removed from looks, cues, chases, and motion keys.")
+        }
+    }
+}
+
+private struct FixturePatchFields: View {
+    let session: ShowSession
+    @Binding var draft: PatchedFixture
+
+    private var addressLabel: String {
+        switch draft.kind {
+        case .movingHead: "Start channel"
+        case .plug: "Relay"
+        case .rgb: "Red relay"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent("Name") { TextField("Fixture name", text: $draft.name).labelsHidden() }
+            LabeledContent("Group") { TextField("Group", text: $draft.group).labelsHidden() }
+            Picker("Controller", selection: $draft.controllerID) {
+                ForEach(session.project.lighting.controllers.filter { $0.kind == draft.kind.controllerKind }) {
+                    Text($0.name).tag($0.id)
+                }
+            }
+            LabeledContent(addressLabel) {
+                TextField(addressLabel, value: $draft.address, format: .number).frame(width: 75)
+            }
+            if draft.kind == .plug {
+                Picker("Icon", selection: Binding(
+                    get: { draft.switchedPlugIcon ?? .plug },
+                    set: { draft.switchedPlugIcon = $0 == .plug ? nil : $0 }
+                )) {
+                    ForEach(SwitchedPlugIcon.allCases) { icon in
+                        Label(icon.label, systemImage: icon.symbol).tag(icon)
+                    }
+                }
+            }
+            if draft.kind == .rgb {
+                LabeledContent("Green relay") { TextField("Green relay", value: $draft.green, format: .number).frame(width: 75) }
+                LabeledContent("Blue relay") { TextField("Blue relay", value: $draft.blue, format: .number).frame(width: 75) }
+            }
+            if draft.kind == .movingHead {
+                Picker("Profile", selection: $draft.headChannels) {
+                    Text("9 channels").tag(9)
+                    Text("11 channels").tag(11)
+                }
+            }
+        }
+    }
+}
+
+struct FixtureEditSheet: View {
+    let session: ShowSession
+    let fixture: PatchedFixture
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: PatchedFixture
+    @State private var issue: String?
+
+    init(session: ShowSession, fixture: PatchedFixture) {
+        self.session = session
+        self.fixture = fixture
+        _draft = State(initialValue: fixture)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Edit Fixture").font(.title2.bold())
+            Label(fixture.kind.rawValue, systemImage: draft.symbol).foregroundStyle(.secondary)
+            FixturePatchFields(session: session, draft: $draft).disabled(!session.canEdit)
+            if let issue {
+                Text(issue).font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Apply Patch") {
+                    if session.applyFixturePatch(draft) { dismiss() }
+                    else { issue = session.message ?? "This fixture is no longer available to edit." }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!session.canEdit || draft == fixture)
+            }
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(20)
+        .frame(width: 390)
+        .onChange(of: draft) { _, _ in
+            if let issue, session.message == issue { session.message = nil }
+            issue = nil
+        }
+        .onDisappear {
+            if let issue, session.message == issue { session.message = nil }
         }
     }
 }

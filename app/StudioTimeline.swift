@@ -62,6 +62,7 @@ struct TimelineView: View {
     }
 
     let session: ShowSession
+    let editFixture: (PatchedFixture) -> Void
     @State private var lookID: UUID?
     @State private var drag: CueDrag?
     @State private var namingSection = false
@@ -195,9 +196,14 @@ struct TimelineView: View {
                                 Label(fixture.name, systemImage: fixture.symbol)
                                     .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 6).frame(height: rowHeight)
+                                    .contentShape(Rectangle())
                             }.buttonStyle(.plain)
                                 .background(session.selection == .fixture(fixture.id) ? studioAccent.opacity(0.13) : .white.opacity(0.028))
                                 .overlay(alignment: .bottom) { Divider() }
+                                .contextMenu {
+                                    Button("Edit Fixture…", systemImage: "slider.horizontal.3") { editFixture(fixture) }
+                                        .disabled(!session.canEdit)
+                                }
                                 .help(fixture.name)
                         }
                     }.font(.caption.weight(.medium))

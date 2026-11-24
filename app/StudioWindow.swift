@@ -13,6 +13,7 @@ struct StudioWindow: View {
     let version: String
     @State private var showPhone = false
     @State private var showPatch = false
+    @State private var editingFixture: PatchedFixture?
     @State private var renaming = false
     @State private var draftName = ""
 
@@ -27,13 +28,14 @@ struct StudioWindow: View {
         .tint(studioAccent)
         .overlay(alignment: .topTrailing) {
             if !session.playing, !session.recording, !session.ready, !session.loadingSong,
-               !session.reviewingTake, !showPatch, !showPhone {
+               !session.reviewingTake, !showPatch, !showPhone, editingFixture == nil {
                 StudioUpdateNotice(checker: updates, installed: version)
             }
         }
         .onChange(of: session.project.id) { _, _ in remote.stop() }
         .sheet(isPresented: $showPhone) { StudioPhonePanel(remote: remote) }
         .sheet(isPresented: $showPatch) { ControllerEditor(session: session) }
+        .sheet(item: $editingFixture) { FixtureEditSheet(session: session, fixture: $0) }
         .sheet(isPresented: Binding(get: { session.reviewingTake && session.workspace == .edit },
                                     set: { session.reviewTake($0) })) {
             TakeReview(session: session)
@@ -98,7 +100,8 @@ struct StudioWindow: View {
             header
             Divider()
             if session.workspace == .edit {
-                ProgramEditor(session: session, settings: layouts, openPatch: { showPatch = true })
+                ProgramEditor(session: session, settings: layouts, openPatch: { showPatch = true },
+                              editFixture: { editingFixture = $0 })
             } else {
                 HSplitView {
                     StageView(session: session, interactive: false).frame(minWidth: 430)
@@ -174,6 +177,7 @@ struct StudioWindow: View {
 struct FixtureSidebar: View {
     let session: ShowSession
     let openPatch: () -> Void
+    let editFixture: (PatchedFixture) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -192,7 +196,14 @@ struct FixtureSidebar: View {
                             Label(fixture.name, systemImage: fixture.symbol).lineLimit(1)
                             Text(fixture.slots.map(String.init).joined(separator: " · "))
                                 .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                        }.tag(StudioSelection.fixture(fixture.id))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            Button("Edit Fixture…", systemImage: "slider.horizontal.3") { editFixture(fixture) }
+                                .disabled(!session.canEdit)
+                        }
+                        .tag(StudioSelection.fixture(fixture.id))
                     }
                 }
             }.listStyle(.sidebar).scrollContentBackground(.hidden)

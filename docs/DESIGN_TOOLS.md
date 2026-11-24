@@ -36,3 +36,8 @@ Use the layout picker in Program or **Window → Layouts**. **Show Overview** ha
 Each layout remembers its own panels and divider positions. Use a panel’s **…** menu to dock another panel, close it, or expand it temporarily. Choose **Restore Panels** to return to the saved arrangement. **Window → Panels** toggles individual panels, and **Window → Layouts → Reset Layout** restores the active preset’s defaults.
 
 The **Show** and **Timeline** menus provide transport and editing commands. Open **Help → Keyboard Shortcuts** with **⌘/** to search them.
+
+
+## Edit a fixture from its row
+
+Right-click a fixture in the Fixtures panel or right-click its name in the Timeline. Choose **Edit Fixture…**, change the name, group, controller, channel or relay assignments, or fixture-specific settings such as a switched-plug icon. Click **Apply Patch** to save the changes in one undoable step. Address conflicts are shown in the editor so you can correct them before applying.
