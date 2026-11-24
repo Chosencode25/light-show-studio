@@ -117,6 +117,82 @@ struct StudioTests {
         #expect(newShow.lighting.fixtures.first == routed)
     }
 
+    @Test func fixtureTimelineCommandsUseExistingPlaybackAndRejectIncompatibleDrops() throws {
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        session.addFixture(.rgb)
+        session.addFixture(.movingHead)
+        let fixtures = session.project.lighting.fixtures
+        let plug = fixtures[0]
+        let strip = fixtures[1]
+        let head = fixtures[2]
+
+        let incompatible = session.placeTimelineCommand(.red, fixtureID: plug.id, at: 1)
+        #expect(!incompatible && session.cues.isEmpty)
+        #expect(session.placeTimelineCommand(.on, fixtureID: plug.id, at: 1))
+        #expect(session.placeTimelineCommand(.off, fixtureID: plug.id, at: 3))
+        #expect(session.placeTimelineCommand(.cyan, fixtureID: strip.id, at: 1))
+        #expect(session.placeTimelineCommand(.dimmer, fixtureID: head.id, at: 1))
+        #expect(session.placeTimelineCommand(.fade, fixtureID: head.id, at: 3))
+        #expect(session.placeTimelineCommand(.movement, fixtureID: head.id, at: 4))
+        #expect(session.placeTimelineCommand(.chase, fixtureID: plug.id, at: 5))
+        #expect(!session.placeTimelineCommand(.off, fixtureID: plug.id, at: 1))
+        session.seek(to: 1)
+        #expect(session.effectiveState(plug) == .plug(true))
+        #expect(session.effectiveState(strip) == .rgb(.cyan))
+        session.seek(to: 2.5)
+        guard case .head(let fading) = session.effectiveState(head) else { Issue.record("Missing head state."); return }
+        #expect(fading.dimmer == 0.25)
+        session.seek(to: 3)
+        #expect(session.effectiveState(plug) == .plug(false))
+        session.seek(to: 4)
+        guard case .head(let moved) = session.effectiveState(head) else { Issue.record("Missing head position."); return }
+        #expect(moved.pan != fading.pan && moved.dimmer == 0)
+        session.seek(to: 5.1)
+        #expect(session.effectiveState(plug) == .plug(true))
+        session.seek(to: 5.3)
+        #expect(session.effectiveState(plug) == .plug(false))
+
+        let encoded = try JSONEncoder().encode(session.project)
+        let reopened = try JSONDecoder().decode(LightShow.self, from: encoded)
+        try reopened.validate()
+        #expect(reopened == session.project)
+        #expect(reopened.lighting.cues.contains { $0.timelineCommand == .cyan })
+        #expect(FixtureTimelineCommand(dragValue: FixtureTimelineCommand.cyan.dragValue) == .cyan)
+        #expect(FixtureTimelineCommand(dragValue: "Cyan") == nil)
+    }
+
+    @Test func fixtureTimelineSplitsSingleTileWithoutMovingTheOtherCommands() throws {
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        session.addFixture(.rgb)
+        let fixtures = session.project.lighting.fixtures
+        let plug = FixtureLookEntry(id: fixtures[0].id, state: .plug(true))
+        let strip = FixtureLookEntry(id: fixtures[1].id, state: .rgb(.red))
+        let group = LightingCue(name: "Chorus", time: 2, entries: [plug, strip])
+        let blocked = LightingCue(name: "Off", time: 4, entries: [.init(id: plug.id, state: .plug(false))])
+        session.setCue(group)
+        session.setCue(blocked)
+        let original = session.project
+        session.moveFixtureCommand(cueID: group.id, fixtureID: plug.id, to: 4)
+        #expect(session.project == original)
+        session.moveFixtureCommand(cueID: group.id, fixtureID: plug.id, to: 3)
+        #expect(session.cues.first?.entries == [strip] && session.cues.first?.id == group.id)
+        let moved = try #require(session.cues.first { $0.time == 3 })
+        #expect(moved.entries == [plug] && moved.id != group.id)
+        session.undoEdit()
+        #expect(session.project == original)
+        session.selectCue(group.id)
+        session.moveSelectedCues(by: 1)
+        #expect(session.cues.first?.time == 3 && session.cues.first?.entries == [plug, strip])
+        session.removeFixtureCommand(cueID: group.id, fixtureID: strip.id)
+        #expect(session.cues.first?.entries == [plug])
+    }
+
     @Test func patchConflictsAndDuplicateFixtureCueTimesDoNotPartiallyCommit() throws {
         let session = makeSession()
         defer { session.finish() }

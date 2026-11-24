@@ -187,6 +187,66 @@ enum FixtureState: Codable, Equatable, Sendable {
     }
 }
 
+enum FixtureTimelineCommand: String, CaseIterable, Codable, Identifiable, Sendable {
+    case on = "On", off = "Off"
+    case red = "Red", green = "Green", blue = "Blue", yellow = "Yellow"
+    case magenta = "Magenta", cyan = "Cyan", white = "White"
+    case dimmer = "Dimmer", fade = "Fade Out", chase = "Chase", movement = "Movement"
+
+    var id: Self { self }
+    var dragValue: String { "LightShowStudio.command:" + rawValue }
+
+    init?(dragValue: String) {
+        let prefix = "LightShowStudio.command:"
+        guard dragValue.hasPrefix(prefix) else { return nil }
+        self.init(rawValue: String(dragValue.dropFirst(prefix.count)))
+    }
+
+    var relayColor: RelayColor? {
+        switch self {
+        case .red: .red
+        case .green: .green
+        case .blue: .blue
+        case .yellow: .yellow
+        case .magenta: .magenta
+        case .cyan: .cyan
+        case .white: .white
+        default: nil
+        }
+    }
+
+    func supports(_ kind: FixtureKind) -> Bool {
+        switch self {
+        case .on, .off, .chase: true
+        case .dimmer, .fade, .movement: kind == .movingHead
+        default: kind != .plug
+        }
+    }
+
+    func state(from previous: FixtureState) -> FixtureState? {
+        guard supports(previous.kind) else { return nil }
+        if self == .off || self == .fade { return previous.darkened }
+        switch previous {
+        case .plug: return self == .on ? .plug(true) : nil
+        case .rgb(let color):
+            if self == .on { return .rgb(color == .off ? .white : color) }
+            return relayColor.map(FixtureState.rgb)
+        case .head(var head):
+            switch self {
+            case .on: head.dimmer = 1
+            case .dimmer: head.dimmer = 0.5
+            case .red, .green, .blue, .yellow, .magenta, .cyan, .white:
+                let wheelSlots: [Self: Int] = [.red: 1, .green: 2, .blue: 3, .yellow: 4, .magenta: 7, .cyan: 5, .white: 0]
+                guard let color = wheelSlots[self] else { return nil }
+                head.color = color
+                if head.dimmer == 0 { head.dimmer = 1 }
+            default: return nil
+            }
+            return .head(head)
+        }
+    }
+}
+
 struct FixtureLookEntry: Codable, Equatable, Identifiable, Sendable {
     var id: UUID
     var state: FixtureState
@@ -219,6 +279,7 @@ struct LightingCue: Codable, Equatable, Identifiable, Sendable {
     var motionCurve: CueCurve?
     var dimmerFade: Double?
     var manualOnly: Bool?
+    var timelineCommand: FixtureTimelineCommand?
     var isManual: Bool { manualOnly == true }
     var entries: [FixtureLookEntry]
 }

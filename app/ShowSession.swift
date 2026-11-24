@@ -386,12 +386,85 @@ final class ShowSession {
         setCue(LightingCue(name: look.name, time: position, entries: look.entries))
     }
 
-    func setCue(_ cue: LightingCue) {
-        if edit({ show in
+    @discardableResult
+    func setCue(_ cue: LightingCue) -> Bool {
+        let saved = edit { show in
             if let index = show.lighting.cues.firstIndex(where: { $0.id == cue.id }) {
-                show.lighting.cues[index] = cue
+                let previous = show.lighting.cues[index]
+                var revised = cue
+                if cue.entries != previous.entries || cue.lead != previous.lead ||
+                    cue.motionCurve != previous.motionCurve || cue.dimmerFade != previous.dimmerFade {
+                    revised.timelineCommand = nil
+                }
+                show.lighting.cues[index] = revised
             } else { show.lighting.cues.append(cue) }
-        }) { selectedCueID = cue.id }
+        }
+        if saved { selectedCueID = cue.id }
+        return saved
+    }
+
+    @discardableResult
+    func placeTimelineCommand(_ command: FixtureTimelineCommand, fixtureID: UUID, at time: Double) -> Bool {
+        guard canEdit, time.isFinite, (0...(project.song?.duration ?? 3600)).contains(time),
+              let fixture = project.lighting.fixtures.first(where: { $0.id == fixtureID }),
+              command.supports(fixture.kind) else { return false }
+        let previous = LightingSchedule(cues: project.lighting.cues).state(for: fixture, at: time)
+        let saved: Bool
+        switch command {
+        case .chase:
+            var clip = ChoreographyClip()
+            clip.name = "Chase"
+            clip.start = time
+            clip.interval = 0.25
+            clip.repeats = 4
+            if fixture.kind == .plug { clip.colors = [SIMD4(1, 1, 1, 1), SIMD4(0, 0, 0, 1)] }
+            clip.targets = [ChoreographyTarget(id: fixture.id,
+                position: fixture.previewPlacement?.origin ?? FixturePreviewPoint(x: 0.5, y: 0.5))]
+            saved = putChase(clip)
+        case .movement:
+            let state = HeadPositionSchedule(keys: project.lighting.positionKeys)
+                .applying(to: previous, fixtureID: fixture.id, at: time)
+            guard case .head(let head) = state else { return false }
+            let pan = head.pan + (head.pan <= 0.75 ? 0.25 : -0.25)
+            saved = putPosition(HeadPositionKey(fixtureID: fixture.id, time: time, pan: pan, tilt: head.tilt))
+        default:
+            guard let state = command.state(from: previous) else { return false }
+            var cue = LightingCue(name: command.rawValue, time: time, entries: [.init(id: fixture.id, state: state)])
+            cue.timelineCommand = command
+            if command == .fade { cue.dimmerFade = 1 }
+            saved = setCue(cue)
+        }
+        if saved { selection = .fixture(fixture.id) }
+        return saved
+    }
+
+    func moveFixtureCommand(cueID: UUID, fixtureID: UUID, to time: Double) {
+        guard time.isFinite, (0...(project.song?.duration ?? 3600)).contains(time),
+              let cue = project.lighting.cues.first(where: { $0.id == cueID && !$0.isManual }),
+              abs(time - cue.time) > 0.000001,
+              let entry = cue.entries.first(where: { $0.id == fixtureID }) else { return }
+        if cue.entries.count == 1 {
+            var moved = cue
+            moved.time = time
+            setCue(moved)
+            return
+        }
+        var moved = cue
+        moved.id = UUID()
+        moved.time = time
+        moved.entries = [entry]
+        if edit({ show in
+            guard let index = show.lighting.cues.firstIndex(where: { $0.id == cueID }) else { return }
+            show.lighting.cues[index].entries.removeAll { $0.id == fixtureID }
+            show.lighting.cues.append(moved)
+        }) { selectedCueID = moved.id }
+    }
+
+    func removeFixtureCommand(cueID: UUID, fixtureID: UUID) {
+        guard var cue = project.lighting.cues.first(where: { $0.id == cueID }) else { return }
+        cue.entries.removeAll { $0.id == fixtureID }
+        if cue.entries.isEmpty { removeCue(cue) }
+        else { setCue(cue) }
     }
 
     func selectCue(_ id: UUID, extending: Bool = false) {
@@ -486,7 +559,8 @@ final class ShowSession {
         if edit({ $0.lighting.cues.removeAll { $0.id == cue.id } }) { selectedCueID = nil }
     }
 
-    func putPosition(_ key: HeadPositionKey) {
+    @discardableResult
+    func putPosition(_ key: HeadPositionKey) -> Bool {
         edit {
             var keys = $0.lighting.positionKeys
             if let index = keys.firstIndex(where: { $0.id == key.id }) { keys[index] = key }
@@ -515,7 +589,8 @@ final class ShowSession {
         putChase(clip)
     }
 
-    func putChase(_ clip: ChoreographyClip) {
+    @discardableResult
+    func putChase(_ clip: ChoreographyClip) -> Bool {
         edit {
             if let index = $0.chases.firstIndex(where: { $0.id == clip.id }) { $0.chases[index] = clip }
             else { $0.chases.append(clip) }

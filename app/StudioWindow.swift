@@ -97,13 +97,14 @@ struct StudioWindow: View {
             header
             Divider()
             if session.workspace == .edit {
-                HSplitView {
-                    FixtureSidebar(session: session, openPatch: { showPatch = true }).frame(minWidth: 185, idealWidth: 205, maxWidth: 270)
-                    StageView(session: session, interactive: true).frame(minWidth: 345)
-                    StudioInspector(session: session).frame(minWidth: 295, idealWidth: 320, maxWidth: 440)
+                VSplitView {
+                    HSplitView {
+                        FixtureSidebar(session: session, openPatch: { showPatch = true }).frame(minWidth: 185, idealWidth: 205, maxWidth: 270)
+                        StageView(session: session, interactive: true).frame(minWidth: 345)
+                        StudioInspector(session: session).frame(minWidth: 295, idealWidth: 320, maxWidth: 440)
+                    }.frame(minHeight: 245, idealHeight: 370)
+                    TimelineView(session: session).frame(minHeight: 175, idealHeight: 300)
                 }
-                Divider()
-                TimelineView(session: session)
             } else {
                 HSplitView {
                     StageView(session: session, interactive: false).frame(minWidth: 430)

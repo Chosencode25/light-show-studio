@@ -67,25 +67,15 @@ struct TimelineView: View {
     @State private var drag: CueDrag?
     @State private var namingSection = false
     @State private var sectionName = ""
+    @State private var draggedCommand: FixtureTimelineCommand?
+    @State private var editingPosition: HeadPositionKey?
+    @State private var editingChase: ChoreographyClip?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             toolbar
-            HStack(spacing: 9) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Time").frame(height: 29)
-                    Text("Soundtrack").frame(height: 36)
-                    Text("Lighting Cues").frame(height: 27)
-                    Text("Chases").frame(height: 22)
-                    Text("Motion Keys").frame(height: 23)
-                }.font(.caption.weight(.medium)).foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
-                GeometryReader { geometry in
-                    ScrollView(.horizontal) {
-                        tracks(width: max(1, geometry.size.width * zoom - 22))
-                            .frame(width: geometry.size.width * zoom, height: 137)
-                    }
-                }.frame(height: 148)
-            }
+            palette
+            fixtureTimeline
         }.padding(.horizontal, 15).padding(.vertical, 8).background(panelBackground)
             .sheet(isPresented: $namingSection) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -101,6 +91,8 @@ struct TimelineView: View {
                     }
                 }.padding(20).frame(width: 345)
             }
+            .sheet(item: $editingPosition) { PositionForm(session: session, draft: $0) }
+            .sheet(item: $editingChase) { ChaseForm(session: session, draft: $0) }
             .onChange(of: session.project.id) { _, _ in drag = nil; zoom = 1 }
     }
 
@@ -154,38 +146,97 @@ struct TimelineView: View {
         }
     }
 
-    private func tracks(width: Double) -> some View {
+    private var palette: some View {
+        HStack(spacing: 6) {
+            ForEach(FixtureTimelineCommand.allCases) { command in
+                let appearance = TimelineTileAppearance(command)
+                TimelineTile(appearance: appearance, selected: false)
+                    .help(command == .fade ? "Fade Out · Reaches dark at the drop time" : command.rawValue)
+                    .accessibilityLabel(command.rawValue)
+                    .onDrag {
+                        draggedCommand = command
+                        return NSItemProvider(object: command.dragValue as NSString)
+                    }
+                if command == .off || command == .white { Divider().frame(height: 16).padding(.horizontal, 3) }
+            }
+            Spacer()
+        }.disabled(!session.canEdit)
+    }
+
+    private var fixtureTimeline: some View {
+        let fixtures = session.project.lighting.fixtures
         let duration = session.project.duration
-        let scale = width / duration
-        return ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.25))
-            grid(width: width, duration: duration)
+        let commands = TimelineFixtureEvent.rows(cues: session.cues, keys: session.project.lighting.positionKeys, chases: session.project.chases)
+        let headingHeight = 90.0
+        let rowHeight = TimelineFixtureLane.height
+        let labelWidth = 145.0
+        let height = headingHeight + rowHeight * Double(fixtures.count)
+        return GeometryReader { geometry in
+            let viewport = max(1, geometry.size.width - labelWidth)
+            let totalWidth = viewport * zoom
+            let scale = max(1, totalWidth - 28) / duration
+            ScrollView(.vertical) {
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Time").frame(height: 29)
+                        Text("Soundtrack").frame(height: 35)
+                        Text("Cue Groups").frame(height: 26)
+                        ForEach(fixtures) { fixture in
+                            Button {
+                                session.selection = .fixture(fixture.id)
+                            } label: {
+                                Label(fixture.name, systemImage: fixture.symbol)
+                                    .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 6).frame(height: rowHeight)
+                            }.buttonStyle(.plain)
+                                .background(session.selection == .fixture(fixture.id) ? studioAccent.opacity(0.13) : .white.opacity(0.028))
+                                .overlay(alignment: .bottom) { Divider() }
+                                .help(fixture.name)
+                        }
+                    }.font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: labelWidth, alignment: .leading)
+                    ScrollView(.horizontal) {
+                        ZStack(alignment: .topLeading) {
+                            grid(width: scale * duration, duration: duration)
+                            VStack(spacing: 0) {
+                                tracks(scale: scale)
+                                    .frame(height: headingHeight)
+                                ForEach(fixtures) { fixture in
+                                    TimelineFixtureLane(session: session, fixture: fixture,
+                                        events: commands[fixture.id] ?? [], scale: scale, duration: duration,
+                                        snapping: snapping, draggedCommand: draggedCommand,
+                                        editPosition: { editingPosition = $0 }, editChase: { editingChase = $0 })
+                                }
+                            }
+                            TimelinePlayhead(session: session, scale: scale, height: height)
+                        }
+                        .frame(width: totalWidth, height: height)
+                        .background(.black.opacity(0.25))
+                        .coordinateSpace(name: "studio-timeline")
+                    }.frame(height: height)
+                }
+            }
+        }
+    }
+
+    private func tracks(scale: Double) -> some View {
+        ZStack(alignment: .topLeading) {
             Color.clear.contentShape(Rectangle()).gesture(SpatialTapGesture().onEnded { event in
                 guard !session.playing else { return }
-                session.seek(to: max(0, Double(event.location.x - 11)/scale))
+                session.seek(to: max(0, Double(event.location.x - 14) / scale))
             })
             ForEach(session.project.markers) { marker in
                 Button { if !session.playing { session.seek(to: marker.time) } } label: {
                     Image(systemName: marker.kind == .beat ? "circle.fill" : "flag.fill")
                         .font(.system(size: 8)).foregroundStyle(marker.kind == .beat ? .pink : studioAccent)
-                }.buttonStyle(.plain).offset(x: 8 + marker.time * scale, y: 18)
+                }.buttonStyle(.plain).offset(x: 11 + marker.time * scale, y: 18)
                     .help("\(marker.label) · \(studioTime(marker.time))").accessibilityLabel(marker.label)
-            }
-            ForEach(session.project.chases) { clip in
-                Capsule().fill(studioAccent.opacity(0.55))
-                    .frame(width: max(3,(clip.end - clip.start) * scale), height: 8)
-                    .offset(x: 11 + clip.start * scale, y: 99).help(clip.name)
-            }
-            ForEach(session.project.lighting.positionKeys) { key in
-                Circle().fill(Color.purple).frame(width: 5, height: 5)
-                    .offset(x: 9 + key.time * scale, y: 123).help(studioTime(key.time))
             }
             ForEach(session.cues.filter { !$0.isManual }) { cue in
                 cueMarker(cue, scale: scale)
             }
-            Rectangle().fill(studioAccent.opacity(0.9)).frame(width: 1.5, height: 137)
-                .offset(x: 11 + session.position * scale).allowsHitTesting(false)
-        }.coordinateSpace(name: "studio-timeline")
+        }
     }
 
     private func cueMarker(_ cue: LightingCue, scale: Double) -> some View {
@@ -197,7 +248,7 @@ struct TimelineView: View {
             Image(systemName: selected ? "diamond.fill" : "diamond")
                 .font(.system(size: 12)).foregroundStyle(selected ? studioAccent : .orange)
                 .frame(width: 20, height: 23)
-        }.buttonStyle(.plain).offset(x: 1 + time * scale, y: 68)
+        }.buttonStyle(.plain).offset(x: 4 + time * scale, y: 65)
             .help("\(cue.name) · \(studioTime(time))").accessibilityLabel(cue.name)
             .accessibilityAddTraits(selected ? .isSelected : [])
             .highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .named("studio-timeline"))
@@ -230,7 +281,7 @@ struct TimelineView: View {
             let options = [0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600]
             let step = options.first { $0 * scale >= 69 } ?? 600
             for time in stride(from: 0.0, through: duration, by: step) {
-                let x = 11 + time * scale
+                let x = 14 + time * scale
                 var line = Path()
                 line.move(to: CGPoint(x: x, y: 17))
                 line.addLine(to: CGPoint(x: x, y: size.height))
@@ -238,7 +289,7 @@ struct TimelineView: View {
                 context.draw(Text(studioTime(time)).font(.system(size: 9)).foregroundStyle(.secondary),
                              at: CGPoint(x: x + 3, y: 4), anchor: .topLeading)
             }
-            for y in [28.0, 64.0, 91.0, 113.0] {
+            for y in [29.0, 64.0, 90.0] {
                 let divider = Path { p in p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y)) }
                 context.stroke(divider, with: .color(.white.opacity(0.10)))
             }
@@ -247,22 +298,278 @@ struct TimelineView: View {
                 let middle = 46.0
                 var first = true
                 for index in peaks.indices {
-                    let point = CGPoint(x: 11 + Double(index) * width / Double(peaks.count - 1), y: middle - max(0.5, Double(peaks[index]) * 15))
+                    let point = CGPoint(x: 14 + Double(index) * width / Double(peaks.count - 1), y: middle - max(0.5, Double(peaks[index]) * 15))
                     if first { shape.move(to: point); first = false } else { shape.addLine(to: point) }
                 }
                 for index in peaks.indices.reversed() {
-                    shape.addLine(to: CGPoint(x: 11 + Double(index) * width / Double(peaks.count - 1), y: middle + max(0.5,Double(peaks[index]) * 15)))
+                    shape.addLine(to: CGPoint(x: 14 + Double(index) * width / Double(peaks.count - 1), y: middle + max(0.5,Double(peaks[index]) * 15)))
                 }
                 shape.closeSubpath()
                 context.fill(shape, with: .color(studioAccent.opacity(0.76)))
             }
             for marker in markers {
-                let x = 11 + marker.time * scale
+                let x = 14 + marker.time * scale
                 let line = Path { p in p.move(to: CGPoint(x: x, y: 26)); p.addLine(to: CGPoint(x: x, y: size.height)) }
                 context.stroke(line, with: .color((marker.kind == .beat ? Color.pink : studioAccent).opacity(0.35)),
                                style: StrokeStyle(lineWidth: 1, dash: [3,4]))
             }
-        }.accessibilityHidden(true)
+        }.allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private struct TimelinePlayhead: View {
+    let session: ShowSession
+    let scale: Double
+    let height: Double
+
+    var body: some View {
+        Rectangle().fill(studioAccent.opacity(0.9)).frame(width: 1.5, height: height)
+            .offset(x: 14 + session.position * scale).allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private enum TimelineFixtureEvent: Identifiable {
+    case cue(LightingCue, FixtureState)
+    case position(HeadPositionKey)
+    case chase(ChoreographyClip)
+
+    struct ID: Hashable {
+        let kind: Int
+        let value: UUID
+    }
+
+    var id: ID {
+        switch self {
+        case .cue(let cue, _): ID(kind: 0, value: cue.id)
+        case .position(let key): ID(kind: 1, value: key.id)
+        case .chase(let clip): ID(kind: 2, value: clip.id)
+        }
+    }
+
+    var time: Double {
+        switch self {
+        case .cue(let cue, _): cue.time
+        case .position(let key): key.time
+        case .chase(let clip): clip.start
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .cue(let cue, let state): "\(cue.name) · \(state.label)"
+        case .position: "Movement"
+        case .chase(let clip): clip.name
+        }
+    }
+
+    var appearance: TimelineTileAppearance {
+        switch self {
+        case .cue(let cue, let state):
+            if let command = cue.timelineCommand { return TimelineTileAppearance(command) }
+            if (cue.dimmerFade ?? 0) > 0 { return TimelineTileAppearance(.fade) }
+            if cue.lead > 0, state.kind == .movingHead { return TimelineTileAppearance(.movement) }
+            let color = TimelineTileAppearance.lightColor(state)
+            return TimelineTileAppearance(symbol: color == nil ? "power" : state.kind == .plug ? "lightbulb.fill" : nil,
+                                          color: color ?? .gray)
+        case .position: return TimelineTileAppearance(.movement)
+        case .chase: return TimelineTileAppearance(.chase)
+        }
+    }
+
+    static func rows(cues: [LightingCue], keys: [HeadPositionKey], chases: [ChoreographyClip]) -> [UUID: [Self]] {
+        var rows: [UUID: [Self]] = [:]
+        for cue in cues where !cue.isManual {
+            for entry in cue.entries { rows[entry.id, default: []].append(.cue(cue, entry.state)) }
+        }
+        for key in keys { rows[key.fixtureID, default: []].append(.position(key)) }
+        for clip in chases {
+            for target in clip.targets { rows[target.id, default: []].append(.chase(clip)) }
+        }
+        return rows
+    }
+}
+
+private struct TimelineTileAppearance {
+    let symbol: String?
+    let color: Color
+
+    init(symbol: String?, color: Color) {
+        self.symbol = symbol
+        self.color = color
+    }
+
+    init(_ command: FixtureTimelineCommand) {
+        switch command {
+        case .on: self.init(symbol: "lightbulb.fill", color: .yellow)
+        case .off: self.init(symbol: "power", color: .gray)
+        case .dimmer: self.init(symbol: "sun.max.half.filled", color: .orange)
+        case .fade: self.init(symbol: "circle.lefthalf.filled", color: .orange)
+        case .chase: self.init(symbol: "bolt.fill", color: .mint)
+        case .movement: self.init(symbol: "arrow.up.and.down.and.arrow.left.and.right", color: .purple)
+        default: self.init(symbol: nil, color: command.relayColor?.displayColor ?? .white)
+        }
+    }
+
+    static func lightColor(_ state: FixtureState) -> Color? {
+        switch state {
+        case .plug(let on): return on ? .yellow : nil
+        case .rgb(let color): return color == .off ? nil : color.displayColor
+        case .head(let head):
+            let colors: [Color] = [.white, .red, .green, .blue, .yellow, .cyan, .pink, .pink,
+                                   .orange, .orange, .blue, .purple, .green]
+            return head.dimmer > 0 ? colors[head.color].opacity(max(0.25, head.dimmer)) : nil
+        }
+    }
+}
+
+private struct TimelineTile: View {
+    let appearance: TimelineTileAppearance
+    let selected: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4).fill(appearance.color.opacity(0.18))
+            if let symbol = appearance.symbol {
+                Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(appearance.color)
+            } else {
+                RoundedRectangle(cornerRadius: 2).fill(appearance.color).frame(width: 13, height: 10)
+            }
+        }.frame(width: 24, height: 19)
+            .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(selected ? studioAccent : .white.opacity(0.21)) }
+            .contentShape(Rectangle())
+    }
+}
+
+private struct TimelineFixtureLane: View {
+    static let height = 52.0
+    let session: ShowSession
+    let fixture: PatchedFixture
+    let events: [TimelineFixtureEvent]
+    let scale: Double
+    let duration: Double
+    let snapping: Bool
+    let draggedCommand: FixtureTimelineCommand?
+    let editPosition: (HeadPositionKey) -> Void
+    let editChase: (ChoreographyClip) -> Void
+
+    @State private var targeted = false
+    @GestureState private var movement: TileMove?
+    private struct TileMove {
+        let id: TimelineFixtureEvent.ID
+        let time: Double
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(targeted && session.canEdit && draggedCommand?.supports(fixture.kind) == true
+                      ? studioAccent.opacity(0.23) : .white.opacity(0.025))
+                .contentShape(Rectangle())
+                .gesture(SpatialTapGesture().onEnded { event in
+                    guard !session.playing else { return }
+                    session.seek(to: max(0, (event.location.x - 14) / scale))
+                })
+            stateBand.allowsHitTesting(false).accessibilityHidden(true)
+            ForEach(events) { tile($0) }
+        }
+        .frame(height: Self.height)
+        .overlay(alignment: .bottom) { Divider().allowsHitTesting(false) }
+        .dropDestination(for: String.self) { items, location in
+            guard session.canEdit, let item = items.first, let command = FixtureTimelineCommand(dragValue: item),
+                  command.supports(fixture.kind) else { return false }
+            return session.placeTimelineCommand(command, fixtureID: fixture.id, at: adjusted((location.x - 14) / scale))
+        } isTargeted: { targeted = $0 }
+    }
+
+    private var stateBand: some View {
+        let states: [(Double, FixtureState)] = events.compactMap { event in
+            guard case .cue(let cue, let state) = event else { return nil }
+            let time = movement?.id == event.id ? movement?.time ?? cue.time : cue.time
+            return (time, state)
+        }.sorted { $0.0 < $1.0 }
+        return Canvas { context, _ in
+            func band(from start: Double, to end: Double, y: Double, color: Color) {
+                let width = (end - start) * scale
+                guard width > 0 else { return }
+                let rect = CGRect(x: 14 + start * scale, y: y, width: width, height: 4)
+                context.fill(Path(rect), with: .color(color))
+            }
+            band(from: 0, to: duration, y: 24, color: .gray.opacity(0.22))
+            for index in states.indices {
+                guard let color = TimelineTileAppearance.lightColor(states[index].1) else { continue }
+                let next = index + 1 < states.count ? states[index + 1].0 : duration
+                band(from: states[index].0, to: next, y: 24, color: color.opacity(0.78))
+            }
+            for event in events {
+                guard case .chase(let clip) = event else { continue }
+                let start = movement?.id == event.id ? movement?.time ?? clip.start : clip.start
+                band(from: start, to: start + clip.duration, y: 46, color: .mint.opacity(0.62))
+            }
+        }
+    }
+
+    private func tile(_ event: TimelineFixtureEvent) -> some View {
+        let time = movement?.id == event.id ? movement?.time ?? event.time : event.time
+        let selected = session.selectedCueIDs.contains(event.id.value) && event.id.kind == 0
+        let y = event.id.kind == 0 ? 2.0 : 29.0
+        return Button { open(event) } label: {
+            TimelineTile(appearance: event.appearance, selected: selected)
+        }.buttonStyle(.plain)
+            .offset(x: 2 + time * scale, y: y)
+            .help("\(event.label) · \(studioTime(time))")
+            .accessibilityLabel(event.label)
+            .highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .named("studio-timeline"))
+                .updating($movement) { drag, value, _ in
+                    guard session.canEdit else { return }
+                    value = TileMove(id: event.id, time: adjusted(event.time + drag.translation.width / scale, event: event))
+                }
+                .onEnded { drag in
+                    guard session.canEdit else { return }
+                    retime(event, to: adjusted(event.time + drag.translation.width / scale, event: event))
+                })
+            .contextMenu {
+                Button(event.id.kind == 2 ? "Remove Chase" : "Remove Command", role: .destructive) {
+                    remove(event)
+                }.disabled(!session.canEdit)
+            }
+    }
+
+    private func adjusted(_ time: Double, event: TimelineFixtureEvent? = nil) -> Double {
+        let snapped = snapping ? CueTiming.nearestMarker(to: time, in: session.project.markers, tolerance: 9 / scale) : time
+        let limit: Double
+        if case .chase(let clip) = event { limit = max(0, duration - clip.duration) }
+        else { limit = duration }
+        return min(limit, max(0, snapped))
+    }
+
+    private func open(_ event: TimelineFixtureEvent) {
+        session.selection = .fixture(fixture.id)
+        switch event {
+        case .cue(let cue, _):
+            session.selectCue(cue.id, extending: !NSEvent.modifierFlags.intersection([.shift, .command]).isEmpty)
+        case .position(let key): if session.canEdit { editPosition(key) }
+        case .chase(let clip): if session.canEdit { editChase(clip) }
+        }
+    }
+
+    private func retime(_ event: TimelineFixtureEvent, to time: Double) {
+        switch event {
+        case .cue(let cue, _): session.moveFixtureCommand(cueID: cue.id, fixtureID: fixture.id, to: time)
+        case .position(var key):
+            key.time = time
+            session.putPosition(key)
+        case .chase(var clip):
+            clip.start = time
+            session.putChase(clip)
+        }
+    }
+
+    private func remove(_ event: TimelineFixtureEvent) {
+        switch event {
+        case .cue(let cue, _): session.removeFixtureCommand(cueID: cue.id, fixtureID: fixture.id)
+        case .position(let key): session.removePosition(key)
+        case .chase(let clip): session.removeChase(clip)
+        }
     }
 }
 
