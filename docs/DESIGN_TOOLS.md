@@ -27,3 +27,12 @@ New palette drops create **five-second clips**. A clip dropped near the end of a
 A thin color band shows cue and clip states, and mint indicates a chase. Fade Out starts fading at its leading edge. Movement clips change pan or tilt over their length. Palette chase clips pulse or alternate colors until their end. Existing cue points and chases keep their saved behavior.
 
 The **Cue Groups** diamonds move whole cues. Shift-click or Command-click diamonds to move several whole cues together. Drag a tile on a fixture row to move only that fixture's part of a cue. Shows saved before this build already have the cues needed for these rows. Manual-only cues remain in the **Cues** menu.
+
+
+## Choose an editing layout
+
+Use the layout picker in Program or **Window → Layouts**. **Show Overview** has fixtures, stage, inspector, and timeline. **Stage Design** gives more room to place fixtures. **Show Timing** fills the editor with the timeline. **Cue Editing** puts the stage and timeline beside the inspector. **Fixture Patch** puts the fixture list beside its settings.
+
+Each layout remembers its own panels and divider positions. Use a panel’s **…** menu to dock another panel, close it, or expand it temporarily. Choose **Restore Panels** to return to the saved arrangement. **Window → Panels** toggles individual panels, and **Window → Layouts → Reset Layout** restores the active preset’s defaults.
+
+The **Show** and **Timeline** menus provide transport and editing commands. Open **Help → Keyboard Shortcuts** with **⌘/** to search them.

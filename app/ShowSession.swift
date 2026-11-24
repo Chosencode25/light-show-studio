@@ -54,6 +54,9 @@ final class ShowSession {
     @ObservationIgnored private var waitingSince: Double?
     @ObservationIgnored private let defaults: UserDefaults
 
+    var timelineZoom = 1.0
+    var timelineSnapping = true
+
     var songMuted = false { didSet { player?.isMuted = songMuted } }
     var hasUnsavedChanges: Bool { project != baseline }
     var canUndo: Bool { canEdit && !undo.isEmpty }
@@ -208,6 +211,7 @@ final class ShowSession {
         stop()
         unloadAudio()
         project = show
+        timelineZoom = 1
         baseline = show
         documentURL = nil
         workspace = .edit

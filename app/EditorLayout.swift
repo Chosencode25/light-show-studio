@@ -9,6 +9,15 @@ enum EditorPanel: String, CaseIterable, Codable, Identifiable {
 
     var id: Self { self }
 
+    var preferredDockSide: EditorDockSide {
+        switch self {
+        case .fixtures: .left
+        case .stage: .above
+        case .inspector: .right
+        case .timeline: .below
+        }
+    }
+
     var minimumSize: CGSize {
         switch self {
         case .fixtures: CGSize(width: 175, height: 120)
@@ -35,18 +44,29 @@ enum EditorSplitAxis: String, Codable {
 }
 
 enum EditorLayoutPreset: String, CaseIterable, Codable, Identifiable {
+    case overview = "Show Overview"
     case stageDesign = "Stage Design"
     case showTiming = "Show Timing"
+    case cueEditing = "Cue Editing"
+    case fixturePatch = "Fixture Patch"
 
     var id: Self { self }
 
     var defaultLayout: EditorLayoutNode {
+        let design = EditorLayoutNode.split(UUID(), .horizontal, 0.18, .panel(.fixtures),
+                     .split(UUID(), .horizontal, 0.66, .panel(.stage), .panel(.inspector)))
         switch self {
+        case .overview:
+            return .split(UUID(), .vertical, 0.53, design, .panel(.timeline))
         case .stageDesign:
-            .split(UUID(), .horizontal, 0.18, .panel(.fixtures),
-                   .split(UUID(), .horizontal, 0.66, .panel(.stage), .panel(.inspector)))
+            return design
         case .showTiming:
-            .panel(.timeline)
+            return .panel(.timeline)
+        case .cueEditing:
+            return .split(UUID(), .horizontal, 0.72,
+                          .split(UUID(), .vertical, 0.37, .panel(.stage), .panel(.timeline)), .panel(.inspector))
+        case .fixturePatch:
+            return .split(UUID(), .horizontal, 0.36, .panel(.fixtures), .panel(.inspector))
         }
     }
 }
@@ -84,7 +104,7 @@ indirect enum EditorLayoutNode: Codable {
 @MainActor @Observable
 final class EditorLayoutSettings {
     private struct Saved: Codable {
-        var preset: EditorLayoutPreset = .stageDesign
+        var preset: EditorLayoutPreset = .overview
         var arrangements: [EditorLayoutPreset: EditorLayoutNode] = [:]
     }
 
@@ -92,7 +112,9 @@ final class EditorLayoutSettings {
     private let defaults: UserDefaults
     private var saved: Saved
     private(set) var layout: EditorLayoutNode
+    private(set) var expandedPanel: EditorPanel?
 
+    var displayedLayout: EditorLayoutNode { expandedPanel.map(EditorLayoutNode.panel) ?? layout }
     var preset: EditorLayoutPreset { saved.preset }
     var availablePanels: [EditorPanel] { EditorPanel.allCases.filter { !layout.panels.contains($0) } }
 
@@ -104,6 +126,7 @@ final class EditorLayoutSettings {
     }
 
     func select(_ preset: EditorLayoutPreset) {
+        restorePanels()
         guard preset != saved.preset else { return }
         saved.arrangements[saved.preset] = layout
         saved.preset = preset
@@ -132,7 +155,31 @@ final class EditorLayoutSettings {
         commit()
     }
 
+    func canToggle(_ panel: EditorPanel) -> Bool {
+        !layout.panels.contains(panel) || layout.panels.count > 1
+    }
+
+    func toggle(_ panel: EditorPanel) {
+        guard canToggle(panel) else { return }
+        restorePanels()
+        if layout.panels.contains(panel) {
+            close(panel)
+        } else if let anchor = layout.panels.first(where: { $0 == .stage || $0 == .timeline }) ?? layout.panels.first {
+            open(panel, beside: anchor, on: panel.preferredDockSide)
+        }
+    }
+
+    func expand(_ panel: EditorPanel) {
+        guard layout.panels.count > 1, layout.panels.contains(panel) else { return }
+        expandedPanel = panel
+    }
+
+    func restorePanels() {
+        expandedPanel = nil
+    }
+
     func reset() {
+        restorePanels()
         layout = preset.defaultLayout
         commit()
     }

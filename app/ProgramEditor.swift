@@ -13,7 +13,7 @@ struct ProgramEditor: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let layout = settings.layout
+            let layout = settings.displayedLayout
             let base = EditorLayoutGeometry(layout: layout, size: proxy.size)
             let geometry = dividerDrag.map {
                 EditorLayoutGeometry(layout: layout.resizing($0.id, to: $0.fraction), size: proxy.size)
@@ -86,15 +86,21 @@ struct ProgramEditor: View {
                     .disabled(!session.canEdit)
                 }
                 Menu {
-                    ForEach(EditorDockSide.allCases) { side in
-                        Menu("Open \(side.rawValue)") {
-                            ForEach(settings.availablePanels) { candidate in
-                                Button(candidate.rawValue) { settings.open(candidate, beside: panel, on: side) }
-                            }
-                        }.disabled(settings.availablePanels.isEmpty)
+                    if settings.expandedPanel != nil {
+                        Button("Restore Panels") { settings.restorePanels() }
+                    } else {
+                        Button("Expand Panel") { settings.expand(panel) }.disabled(settings.layout.panels.count == 1)
+                        Divider()
+                        ForEach(EditorDockSide.allCases) { side in
+                            Menu("Open \(side.rawValue)") {
+                                ForEach(settings.availablePanels) { candidate in
+                                    Button(candidate.rawValue) { settings.open(candidate, beside: panel, on: side) }
+                                }
+                            }.disabled(settings.availablePanels.isEmpty)
+                        }
+                        Divider()
+                        Button("Close Panel") { settings.close(panel) }.disabled(settings.layout.panels.count == 1)
                     }
-                    Divider()
-                    Button("Close Panel") { settings.close(panel) }.disabled(settings.layout.panels.count == 1)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

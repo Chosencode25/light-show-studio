@@ -15,3 +15,7 @@ Palette drops use five-second clips, shortened at the end of a soundtrack as nee
 ## Editor layouts
 
 Add Stage Design for the fixture list, stage preview, and inspector, and Show Timing for the timeline. Dock missing panels left, right, above, or below any visible panel. Use dividers to resize panels and collapse the split when a panel closes. Save each preset’s arrangement in app preferences and reset the current preset from the Window menu. Share the open show and editing state across presets.
+
+## Layouts and commands
+
+Add Show Overview, Cue Editing, and Fixture Patch alongside Stage Design and Show Timing. Preserve saved preset arrangements. Add temporary panel expansion, quick preset switching, and panel visibility commands. Reuse the existing show session for transport, timeline editing, and zoom commands. Add a searchable shortcut reference and the one-word project command guide.

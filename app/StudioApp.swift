@@ -12,6 +12,11 @@ struct LightShowStudioApp: App {
         }
         .defaultSize(width: 1220, height: 770)
         .commands { StudioCommands(session: delegate.session, layouts: delegate.layouts, checkUpdates: { delegate.checkUpdates(manual: true) }) }
+        Window("Keyboard Shortcuts", id: "studio-shortcuts") {
+            StudioShortcutGuide()
+                .frame(minWidth: 440, minHeight: 375)
+        }
+        .defaultSize(width: 500, height: 550)
     }
 }
 
@@ -39,44 +44,4 @@ final class StudioDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { remote.stop(); session.finish() }
-}
-
-struct StudioCommands: Commands {
-    let session: ShowSession
-    let layouts: EditorLayoutSettings
-    let checkUpdates: () -> Void
-    var body: some Commands {
-        CommandGroup(after: .appInfo) {
-            Button("Check for Updates…", action: checkUpdates)
-        }
-        CommandGroup(replacing: .newItem) {
-            Button("New Light Show") { session.newShow() }.keyboardShortcut("n")
-            Button("Open Light Show…") { session.chooseShow() }.keyboardShortcut("o")
-            Button("New Show from Setup…") { session.chooseSetup() }
-        }
-        CommandGroup(replacing: .saveItem) {
-            Button("Save Light Show") { session.save() }.keyboardShortcut("s").disabled(session.isHome)
-            Button("Save Light Show As…") { session.save(asCopy: true) }.keyboardShortcut("s", modifiers: [.command, .shift]).disabled(session.isHome)
-            Button("Save Fixture Setup…") { session.saveSetup() }.disabled(session.isHome)
-        }
-        CommandGroup(after: .windowArrangement) {
-            Menu("Layouts") {
-                ForEach(EditorLayoutPreset.allCases) { preset in
-                    Button { layouts.select(preset) } label: {
-                        if layouts.preset == preset {
-                            Label(preset.rawValue, systemImage: "checkmark")
-                        } else {
-                            Text(preset.rawValue)
-                        }
-                    }
-                }
-                Divider()
-                Button("Reset Layout") { layouts.reset() }
-            }.disabled(session.isHome || session.workspace != .edit)
-        }
-        CommandGroup(replacing: .undoRedo) {
-            Button("Undo") { session.undoEdit() }.keyboardShortcut("z").disabled(!session.canUndo)
-            Button("Redo") { session.redoEdit() }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(!session.canRedo)
-        }
-    }
 }

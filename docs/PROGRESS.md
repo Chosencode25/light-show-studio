@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 9
+
+Added Show Overview, Cue Editing, and Fixture Patch presets. Program has a layout picker, panel expansion preserves the saved arrangement, and the Window menu can show or hide individual panels. The new Show and Timeline command menus share the existing transport and editor state. Help has a searchable shortcut reference. The one-word chat commands are recorded in [the project guide](CHAT_COMMANDS.md).
+
+Xcode 27.0 beta 5 (27A5237l) passed all 21 Release tests. The new tests check the new presets, restored panels, timeline commands across layouts, and Show Mode readiness. The universal app and ZIP passed strict signature verification and file comparisons. Visual acceptance remains pending.
+
 ## November 24, 2026 · v0.3 build 8 local preview
 
 Added **Window → Layouts** with **Stage Design** for fixtures, stage preview, and inspector, and **Show Timing** for the timeline. The panel menu opens another editor panel to the left, right, above, or below, and closes panels. Drag dividers to resize. The app remembers each preset’s arrangement in preferences, and **Reset Layout** restores the active preset. Both layouts use the same show, playhead, and selection. Show files continue to use format 3.

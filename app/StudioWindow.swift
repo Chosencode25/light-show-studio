@@ -149,6 +149,19 @@ struct StudioWindow: View {
             }.pickerStyle(.segmented).labelsHidden().fixedSize()
             Spacer()
             if session.workspace == .edit {
+                Menu {
+                    ForEach(EditorLayoutPreset.allCases) { preset in
+                        Button {
+                            layouts.select(preset)
+                        } label: {
+                            if layouts.preset == preset { Label(preset.rawValue, systemImage: "checkmark") }
+                            else { Text(preset.rawValue) }
+                        }
+                    }
+                    if layouts.expandedPanel != nil { Button("Restore Panels") { layouts.restorePanels() } }
+                } label: {
+                    Label(layouts.preset.rawValue, systemImage: "rectangle.split.2x1").lineLimit(1)
+                }.fixedSize().help("Switch editor layout")
                 Button("Soundtrack…", systemImage: "music.note") { session.chooseSong() }.disabled(!session.canEdit)
             }
             Button(remote.isPaired ? "Phone Connected" : "Phone Remote", systemImage: "iphone") { showPhone = true }

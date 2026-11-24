@@ -63,14 +63,14 @@ struct TimelineView: View {
 
     let session: ShowSession
     @State private var lookID: UUID?
-    @State private var zoom = 1.0
-    @State private var snapping = true
     @State private var drag: CueDrag?
     @State private var namingSection = false
     @State private var sectionName = ""
     @State private var draggedCommand: FixtureTimelineCommand?
     @State private var editingPosition: HeadPositionKey?
     @State private var editingChase: ChoreographyClip?
+
+    private var snapping: Bool { session.timelineSnapping }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -94,7 +94,7 @@ struct TimelineView: View {
             }
             .sheet(item: $editingPosition) { PositionForm(session: session, draft: $0) }
             .sheet(item: $editingChase) { ChaseForm(session: session, draft: $0) }
-            .onChange(of: session.project.id) { _, _ in drag = nil; zoom = 1 }
+            .onChange(of: session.project.id) { _, _ in drag = nil }
     }
 
     private func scrollWhenNarrow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -147,8 +147,8 @@ struct TimelineView: View {
                         }.disabled(!session.canEdit)
                     }
                 }.fixedSize()
-                Toggle("Snap", isOn: $snapping).toggleStyle(.checkbox).help("Snap cue drags to nearby beat and section markers.")
-                Slider(value: $zoom, in: 1...16).frame(width: 82).accessibilityLabel("Timeline zoom").help("Timeline zoom")
+                Toggle("Snap", isOn: Binding(get: { session.timelineSnapping }, set: { session.timelineSnapping = $0 })).toggleStyle(.checkbox).help("Snap cue drags to nearby beat and section markers.")
+                Slider(value: Binding(get: { session.timelineZoom }, set: { session.timelineZoom = $0 }), in: 1...16).frame(width: 82).accessibilityLabel("Timeline zoom").help("Timeline zoom")
             }
         }
     }
@@ -180,7 +180,7 @@ struct TimelineView: View {
         let height = headingHeight + rowHeight * Double(fixtures.count)
         return GeometryReader { geometry in
             let viewport = max(1, geometry.size.width - labelWidth)
-            let totalWidth = viewport * zoom
+            let totalWidth = viewport * session.timelineZoom
             let scale = max(1, totalWidth - 28) / duration
             ScrollView(.vertical) {
                 HStack(alignment: .top, spacing: 0) {
