@@ -392,7 +392,9 @@ final class ShowSession {
             if let index = show.lighting.cues.firstIndex(where: { $0.id == cue.id }) {
                 let previous = show.lighting.cues[index]
                 var revised = cue
-                if cue.entries != previous.entries || cue.lead != previous.lead ||
+                let effectClip = cue.clipDuration != nil &&
+                    (cue.timelineCommand == .chase || cue.timelineCommand == .movement || cue.timelineCommand == .fade)
+                if !effectClip, cue.entries != previous.entries || cue.lead != previous.lead ||
                     cue.motionCurve != previous.motionCurve || cue.dimmerFade != previous.dimmerFade {
                     revised.timelineCommand = nil
                 }
@@ -405,37 +407,49 @@ final class ShowSession {
 
     @discardableResult
     func placeTimelineCommand(_ command: FixtureTimelineCommand, fixtureID: UUID, at time: Double) -> Bool {
-        guard canEdit, time.isFinite, (0...(project.song?.duration ?? 3600)).contains(time),
+        let limit = project.song?.duration ?? 3600
+        guard canEdit, time.isFinite, (0...limit).contains(time),
               let fixture = project.lighting.fixtures.first(where: { $0.id == fixtureID }),
               command.supports(fixture.kind) else { return false }
-        let previous = LightingSchedule(cues: project.lighting.cues).state(for: fixture, at: time)
-        let saved: Bool
+        let start = min(time, limit - CueTiming.minimumClipDuration)
+        let length = min(CueTiming.defaultClipDuration, limit - start)
+        let schedule = LightingSchedule(cues: project.lighting.cues)
+        let scheduled = schedule.state(for: fixture, at: start)
+        var previous = HeadPositionSchedule(keys: project.lighting.positionKeys)
+            .applying(to: scheduled, fixtureID: fixture.id, at: start)
+        for clip in schedule.activeClips(for: fixture.id, at: start) {
+            previous = LightingSimulation.clipOutput(clip.cue, target: clip.state, over: previous,
+                                                     elapsed: start - clip.cue.time)
+        }
+        let state: FixtureState
         switch command {
         case .chase:
-            var clip = ChoreographyClip()
-            clip.name = "Chase"
-            clip.start = time
-            clip.interval = 0.25
-            clip.repeats = 4
-            if fixture.kind == .plug { clip.colors = [SIMD4(1, 1, 1, 1), SIMD4(0, 0, 0, 1)] }
-            clip.targets = [ChoreographyTarget(id: fixture.id,
-                position: fixture.previewPlacement?.origin ?? FixturePreviewPoint(x: 0.5, y: 0.5))]
-            saved = putChase(clip)
+            state = previous
         case .movement:
-            let state = HeadPositionSchedule(keys: project.lighting.positionKeys)
-                .applying(to: previous, fixtureID: fixture.id, at: time)
-            guard case .head(let head) = state else { return false }
-            let pan = head.pan + (head.pan <= 0.75 ? 0.25 : -0.25)
-            saved = putPosition(HeadPositionKey(fixtureID: fixture.id, time: time, pan: pan, tilt: head.tilt))
+            guard case .head(var head) = previous else { return false }
+            head.pan += head.pan <= 0.75 ? 0.25 : -0.25
+            state = .head(head)
         default:
-            guard let state = command.state(from: previous) else { return false }
-            var cue = LightingCue(name: command.rawValue, time: time, entries: [.init(id: fixture.id, state: state)])
-            cue.timelineCommand = command
-            if command == .fade { cue.dimmerFade = 1 }
-            saved = setCue(cue)
+            guard let result = command.state(from: previous) else { return false }
+            state = result
         }
-        if saved { selection = .fixture(fixture.id) }
-        return saved
+        var cue = LightingCue(name: command.rawValue, time: start, entries: [.init(id: fixture.id, state: state)])
+        cue.timelineCommand = command
+        cue.clipDuration = length
+        if command == .fade { cue.dimmerFade = 1 }
+        guard setCue(cue) else { return false }
+        selection = .fixture(fixture.id)
+        return true
+    }
+
+    func resizeClip(cueID: UUID, fixtureID: UUID, start: Double, end: Double) {
+        guard start.isFinite, end.isFinite,
+              let cue = project.lighting.cues.first(where: { $0.id == cueID && $0.clipDuration != nil }),
+              let entry = cue.entries.first(where: { $0.id == fixtureID }) else { return }
+        var resized = cue
+        resized.time = start
+        resized.clipDuration = end - start
+        saveFixtureCommand(resized, original: cue, entry: entry)
     }
 
     func moveFixtureCommand(cueID: UUID, fixtureID: UUID, to time: Double) {
@@ -443,21 +457,25 @@ final class ShowSession {
               let cue = project.lighting.cues.first(where: { $0.id == cueID && !$0.isManual }),
               abs(time - cue.time) > 0.000001,
               let entry = cue.entries.first(where: { $0.id == fixtureID }) else { return }
-        if cue.entries.count == 1 {
-            var moved = cue
-            moved.time = time
-            setCue(moved)
+        var moved = cue
+        moved.time = time
+        saveFixtureCommand(moved, original: cue, entry: entry)
+    }
+
+    private func saveFixtureCommand(_ revised: LightingCue, original: LightingCue, entry: FixtureLookEntry) {
+        guard revised != original else { return }
+        if original.entries.count == 1 {
+            setCue(revised)
             return
         }
-        var moved = cue
-        moved.id = UUID()
-        moved.time = time
-        moved.entries = [entry]
+        var split = revised
+        split.id = UUID()
+        split.entries = [entry]
         if edit({ show in
-            guard let index = show.lighting.cues.firstIndex(where: { $0.id == cueID }) else { return }
-            show.lighting.cues[index].entries.removeAll { $0.id == fixtureID }
-            show.lighting.cues.append(moved)
-        }) { selectedCueID = moved.id }
+            guard let index = show.lighting.cues.firstIndex(where: { $0.id == original.id }) else { return }
+            show.lighting.cues[index].entries.removeAll { $0.id == entry.id }
+            show.lighting.cues.append(split)
+        }) { selectedCueID = split.id }
     }
 
     func removeFixtureCommand(cueID: UUID, fixtureID: UUID) {
@@ -487,7 +505,7 @@ final class ShowSession {
     func moveSelectedCues(by desired: Double) {
         let selected = project.lighting.cues.filter { selectedCueIDs.contains($0.id) }
         guard !selected.isEmpty, desired.isFinite else { return }
-        let offset = CueTiming.boundedOffset(desired, times: selected.map(\.time), end: project.song?.duration ?? 3600)
+        let offset = CueTiming.boundedOffset(desired, cues: selected, end: project.song?.duration ?? 3600)
         guard abs(offset) > 0.000001 else { return }
         let ids = selectedCueIDs
         edit {
@@ -823,6 +841,13 @@ final class ShowSession {
             let time = player.currentTime().seconds
             guard (0..<project.duration).contains(time) else { return false }
             output = LightingCue(name: cue.name, time: time, entries: cue.entries)
+            if let duration = cue.clipDuration {
+                let remaining = project.duration - time
+                guard remaining >= CueTiming.minimumClipDuration else { return false }
+                output.timelineCommand = cue.timelineCommand
+                output.clipDuration = min(duration, remaining)
+                output.dimmerFade = cue.dimmerFade
+            }
             take.append(output)
             message = nil
         }

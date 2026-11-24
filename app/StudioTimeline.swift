@@ -57,6 +57,7 @@ struct TimelineView: View {
     private struct CueDrag {
         let anchor: Double
         let times: [UUID: Double]
+        let cues: [LightingCue]
         var offset = 0.0
     }
 
@@ -151,7 +152,7 @@ struct TimelineView: View {
             ForEach(FixtureTimelineCommand.allCases) { command in
                 let appearance = TimelineTileAppearance(command)
                 TimelineTile(appearance: appearance, selected: false)
-                    .help(command == .fade ? "Fade Out · Reaches dark at the drop time" : command.rawValue)
+                    .help(command == .fade ? "Fade Out · Starts fading at the drop time" : command.rawValue)
                     .accessibilityLabel(command.rawValue)
                     .onDrag {
                         draggedCommand = command
@@ -257,18 +258,18 @@ struct TimelineView: View {
                     if drag == nil {
                         if !session.selectedCueIDs.contains(cue.id) { session.selectCue(cue.id) }
                         let entries = session.cues.filter { session.selectedCueIDs.contains($0.id) }
-                        drag = CueDrag(anchor: cue.time, times: Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0.time) }))
+                        drag = CueDrag(anchor: cue.time, times: Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0.time) }), cues: entries)
                     }
                     guard let pending = drag else { return }
                     let target = pending.anchor + event.translation.width / scale
                     let time = snapping ? CueTiming.nearestMarker(to: target, in: session.project.markers, tolerance: 9 / scale) : target
-                    drag?.offset = CueTiming.boundedOffset(time - pending.anchor, times: Array(pending.times.values),
+                    drag?.offset = CueTiming.boundedOffset(time - pending.anchor, cues: pending.cues,
                                                             end: session.project.song?.duration ?? 3600)
                 }
                 .onEnded { _ in
                     defer { drag = nil }
                     guard let drag, session.canEdit, Set(drag.times.keys) == session.selectedCueIDs,
-                          session.cues.allSatisfy({ drag.times[$0.id] == nil || drag.times[$0.id] == $0.time }) else { return }
+                          session.cues.filter({ drag.times[$0.id] != nil }) == drag.cues else { return }
                     session.moveSelectedCues(by: drag.offset)
                 })
     }
@@ -457,6 +458,11 @@ private struct TimelineFixtureLane: View {
     private struct TileMove {
         let id: TimelineFixtureEvent.ID
         let time: Double
+        var end: Double? = nil
+    }
+
+    private enum ClipDragPart {
+        case body, start, end
     }
 
     var body: some View {
@@ -470,7 +476,13 @@ private struct TimelineFixtureLane: View {
                     session.seek(to: max(0, (event.location.x - 14) / scale))
                 })
             stateBand.allowsHitTesting(false).accessibilityHidden(true)
-            ForEach(events) { tile($0) }
+            ForEach(events) { event in
+                if case .cue(let cue, _) = event, cue.clipDuration != nil {
+                    clipTile(event, cue: cue)
+                } else {
+                    tile(event)
+                }
+            }
         }
         .frame(height: Self.height)
         .overlay(alignment: .bottom) { Divider().allowsHitTesting(false) }
@@ -483,7 +495,7 @@ private struct TimelineFixtureLane: View {
 
     private var stateBand: some View {
         let states: [(Double, FixtureState)] = events.compactMap { event in
-            guard case .cue(let cue, let state) = event else { return nil }
+            guard case .cue(let cue, let state) = event, cue.clipDuration == nil else { return nil }
             let time = movement?.id == event.id ? movement?.time ?? cue.time : cue.time
             return (time, state)
         }.sorted { $0.0 < $1.0 }
@@ -501,10 +513,117 @@ private struct TimelineFixtureLane: View {
                 band(from: states[index].0, to: next, y: 24, color: color.opacity(0.78))
             }
             for event in events {
-                guard case .chase(let clip) = event else { continue }
-                let start = movement?.id == event.id ? movement?.time ?? clip.start : clip.start
-                band(from: start, to: start + clip.duration, y: 46, color: .mint.opacity(0.62))
+                switch event {
+                case .cue(let cue, let state) where cue.clipDuration != nil && cue.timelineCommand != .movement:
+                    let start = movement?.id == event.id ? movement?.time ?? cue.time : cue.time
+                    let end = movement?.id == event.id ? movement?.end ?? cue.end : cue.end
+                    let color = cue.timelineCommand == .chase ? Color.mint : TimelineTileAppearance.lightColor(state)
+                    band(from: start, to: end, y: 24, color: color ?? Color(white: 0.24))
+                case .chase(let clip):
+                    let start = movement?.id == event.id ? movement?.time ?? clip.start : clip.start
+                    band(from: start, to: start + clip.duration, y: 46, color: .mint.opacity(0.62))
+                default: break
+                }
             }
+        }
+    }
+
+    private func clipTile(_ event: TimelineFixtureEvent, cue: LightingCue) -> some View {
+        let preview = movement?.id == event.id ? movement : nil
+        let start = preview?.time ?? cue.time
+        let end = preview?.end ?? cue.end
+        let width = max(1, (end - start) * scale)
+        let gripWidth = min(9, width / 4)
+        let selected = session.selectedCueIDs.contains(cue.id)
+        let appearance = event.appearance
+        return ZStack {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color(white: 0.13))
+                .overlay { RoundedRectangle(cornerRadius: 4).fill(appearance.color.opacity(0.26)) }
+                .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(selected ? studioAccent : appearance.color.opacity(0.60)) }
+            HStack(spacing: 0) {
+                trimHandle(width: gripWidth, label: "Trim clip start")
+                    .gesture(clipDrag(event, cue: cue, part: .start))
+                Button { open(event) } label: {
+                    ZStack {
+                        Color.clear
+                        if width >= 16 {
+                            if let symbol = appearance.symbol {
+                                Image(systemName: symbol).font(.system(size: min(11, width / 3), weight: .semibold))
+                                    .foregroundStyle(appearance.color)
+                            } else {
+                                RoundedRectangle(cornerRadius: 2).fill(appearance.color)
+                                    .frame(width: min(13, width / 3), height: 8)
+                            }
+                        }
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(event.label)
+                    .highPriorityGesture(clipDrag(event, cue: cue, part: .body))
+                trimHandle(width: gripWidth, label: "Trim clip end")
+                    .gesture(clipDrag(event, cue: cue, part: .end))
+            }.padding(.vertical, 2)
+        }
+        .frame(width: width, height: 22)
+        .offset(x: 14 + start * scale, y: 1)
+        .zIndex(selected || preview != nil ? 2 : 1)
+        .help("\(event.label) · \(studioTime(start)) to \(studioTime(end))")
+        .contextMenu {
+            Button("Remove Clip", role: .destructive) { remove(event) }.disabled(!session.canEdit)
+        }
+    }
+
+    private func trimHandle(width: Double, label: String) -> some View {
+        Rectangle().fill(.clear)
+            .overlay {
+                if width >= 4 {
+                    Capsule().fill(.white.opacity(0.6)).frame(width: 2, height: 10)
+                }
+            }
+            .contentShape(Rectangle())
+            .frame(width: width)
+            .accessibilityLabel(label)
+            .help(label)
+            .allowsHitTesting(session.canEdit)
+    }
+
+    private func clipDrag(_ event: TimelineFixtureEvent, cue: LightingCue, part: ClipDragPart) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named("studio-timeline"))
+            .updating($movement) { drag, value, _ in
+                guard session.canEdit else { return }
+                value = clipTiming(event, cue: cue, part: part, delta: drag.translation.width / scale)
+            }
+            .onEnded { drag in
+                guard session.canEdit else { return }
+                let timing = clipTiming(event, cue: cue, part: part, delta: drag.translation.width / scale)
+                if let end = timing.end {
+                    if part == .body {
+                        session.moveFixtureCommand(cueID: cue.id, fixtureID: fixture.id, to: timing.time)
+                    } else {
+                        session.resizeClip(cueID: cue.id, fixtureID: fixture.id, start: timing.time, end: end)
+                    }
+                }
+            }
+    }
+
+    private func clipTiming(_ event: TimelineFixtureEvent, cue: LightingCue, part: ClipDragPart, delta: Double) -> TileMove {
+        let limit = session.project.song?.duration ?? 3600
+        let minimum = CueTiming.minimumClipDuration
+        func snap(_ time: Double) -> Double {
+            snapping ? CueTiming.nearestMarker(to: time, in: session.project.markers, tolerance: 9 / scale) : time
+        }
+        switch part {
+        case .body:
+            let length = cue.clipDuration ?? minimum
+            let start = min(max(0, limit - length), max(0, snap(cue.time + delta)))
+            return TileMove(id: event.id, time: start, end: start + length)
+        case .start:
+            let maximum = max(0, cue.end - minimum)
+            let start = min(maximum, max(0, snap(cue.time + delta)))
+            return TileMove(id: event.id, time: start, end: cue.end)
+        case .end:
+            let end = min(limit, max(cue.time + minimum, snap(cue.end + delta)))
+            return TileMove(id: event.id, time: cue.time, end: end)
         }
     }
 

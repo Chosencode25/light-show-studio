@@ -59,6 +59,14 @@ struct TimelineMarker: Codable, Equatable, Sendable, Identifiable {
 }
 
 enum CueTiming {
+    static let defaultClipDuration = 5.0
+    static let minimumClipDuration = 0.05
+
+    static func boundedOffset(_ offset: Double, cues: [LightingCue], end: Double) -> Double {
+        guard let start = cues.map(\.time).min(), let last = cues.map(\.end).max() else { return 0 }
+        return min(max(0, end - last), max(-start, offset))
+    }
+
     static func nearestMarker(to time: Double, in markers: [TimelineMarker], tolerance: Double) -> Double {
         guard let marker = markers.min(by: { abs($0.time - time) < abs($1.time - time) }),
               abs(marker.time - time) <= tolerance else { return time }

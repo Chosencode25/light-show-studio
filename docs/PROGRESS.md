@@ -1,5 +1,11 @@
 # Progress
 
+## November 24, 2026 · v0.3 build 7
+
+New timeline drops create five-second clips that can be moved from the center or trimmed at either end. Clips stop at their end and let the underlying program resume. The latest-started overlapping clip takes precedence. Older cue points keep their behavior. Shows saved by this build use format 3, and fixture setups continue to use format 2.
+
+Xcode 27.0 beta 5 (27A5237l) passed all sixteen Release tests. The new tests cover default length, overlap, restoring underlying cues, trims, moving and undoing clips, soundtrack boundaries, and reopening saved shows. The universal app and ZIP passed strict signature verification and file comparisons. Visual acceptance remains pending.
+
 ## November 24, 2026 · v0.3 build 6
 
 Added a fixture-by-fixture timeline with a shared waveform, fixed-size command tiles, and color bands. The timeline palette adds power, color, dimmer, fade, chase, and movement commands where supported. Individual tiles retime one fixture from a cue, while the Cue Groups row still moves whole cues. Existing shows open on the new rows. The Program divider can give the timeline more room.

@@ -51,10 +51,15 @@ final class LightingSimulation {
         let motion: Double
         let fade: Double
         let curve: CueCurve
+        let clip: LightingCue?
 
-        func value(at uptime: Double) -> FixtureState {
-            guard case .head(var head) = target, case .head(let initial) = origin else { return target }
+        @MainActor func value(at uptime: Double) -> FixtureState? {
             let elapsed = max(0, uptime - started)
+            if let clip, let duration = clip.clipDuration {
+                guard elapsed < duration else { return nil }
+                return LightingSimulation.clipOutput(clip, target: target, over: origin, elapsed: elapsed)
+            }
+            guard case .head(var head) = target, case .head(let initial) = origin else { return target }
             if motion > 0, elapsed < motion {
                 let amount = curve.evaluate(elapsed / motion)
                 head.pan = initial.pan + (head.pan - initial.pan) * amount
@@ -70,7 +75,7 @@ final class LightingSimulation {
 
     @ObservationIgnored private var manual: [UUID: ManualChange] = [:]
     func hasManualTransitions(at now: Double) -> Bool {
-        return manual.values.contains { now < $0.started + max($0.motion, $0.fade) }
+        return manual.values.contains { now < $0.started + ($0.clip?.clipDuration ?? max($0.motion, $0.fade)) }
     }
 
     func clearManualCues() { manual.removeAll() }
@@ -83,7 +88,7 @@ final class LightingSimulation {
             manual[entry.id] = ManualChange(origin: previous[entry.id] ?? entry.state.kind.dark,
                                              target: entry.state, started: uptime,
                                              motion: curve == .snap ? 0 : cue.lead,
-                                             fade: cue.dimmerFade ?? 0, curve: curve)
+                                             fade: cue.dimmerFade ?? 0, curve: curve, clip: cue.clipDuration == nil ? nil : cue)
         }
     }
 
@@ -112,6 +117,30 @@ final class LightingSimulation {
             head.dimmer = Double(max(color.x, color.y, color.z))
             head.color = red && green && blue ? 0 : red && green ? 4 : red ? 1 : green ? 2 : blue ? 3 : 0
             return .head(head)
+        }
+    }
+
+    static func clipOutput(_ cue: LightingCue, target: FixtureState, over base: FixtureState, elapsed: Double) -> FixtureState {
+        switch cue.timelineCommand {
+        case .chase:
+            let firstStep = Int(elapsed / 0.25).isMultiple(of: 2)
+            if base.kind == .plug { return .plug(firstStep) }
+            let color: SIMD4<Float> = firstStep ? SIMD4(1, 0, 0, 1) : SIMD4(0, 0, 1, 1)
+            return choreographed(base, color: color)
+        case .movement:
+            guard case .head(var head) = base, case .head(let end) = target else { return target }
+            let amount = (cue.motionCurve ?? .linear).evaluate(elapsed / (cue.clipDuration ?? 1))
+            head.pan += (end.pan - head.pan) * amount
+            head.tilt += (end.tilt - head.tilt) * amount
+            return .head(head)
+        case .fade:
+            guard case .head(var head) = base, case .head(let end) = target else { return target }
+            let fade = min(cue.dimmerFade ?? 1, cue.clipDuration ?? 1)
+            let amount = fade > 0 ? CueCurve.linear.evaluate(elapsed / fade) : 1
+            head.dimmer += (end.dimmer - head.dimmer) * amount
+            return .head(head)
+        default:
+            return target
         }
     }
 
@@ -170,12 +199,16 @@ final class LightingSimulation {
                 let scheduled = positions.applying(to: schedule.state(for: fixture, at: time), fixtureID: fixture.id, at: time)
                 let sample = choreography.lazy
                     .compactMap { clip in clip.sample(at: time, target: fixture.id).map { (clip.name, $0) } }.first
-                let base: FixtureState
+                var base: FixtureState
                 var activeEffect: String?
                 if let (name, step) = sample, !schedule.hasCue(for: fixture.id, from: step.stepStart, through: time) {
                     base = step.active ? Self.choreographed(scheduled, color: step.color) : scheduled.darkened
                     if step.active && canPreviewEffect { activeEffect = name }
                 } else { base = scheduled }
+                for clip in schedule.activeClips(for: fixture.id, at: time) {
+                    base = Self.clipOutput(clip.cue, target: clip.state, over: base, elapsed: time - clip.cue.time)
+                    activeEffect = canPreviewEffect && clip.cue.timelineCommand == .chase ? clip.cue.name : nil
+                }
                 let override = overrides[fixture.id] ?? manual[fixture.id]?.value(at: uptime)
                 let intended = override ?? base
                 let effective: FixtureState

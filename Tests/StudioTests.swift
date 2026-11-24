@@ -142,12 +142,12 @@ struct StudioTests {
         session.seek(to: 1)
         #expect(session.effectiveState(plug) == .plug(true))
         #expect(session.effectiveState(strip) == .rgb(.cyan))
-        session.seek(to: 2.5)
+        session.seek(to: 3.5)
         guard case .head(let fading) = session.effectiveState(head) else { Issue.record("Missing head state."); return }
         #expect(fading.dimmer == 0.25)
         session.seek(to: 3)
         #expect(session.effectiveState(plug) == .plug(false))
-        session.seek(to: 4)
+        session.seek(to: 4.5)
         guard case .head(let moved) = session.effectiveState(head) else { Issue.record("Missing head position."); return }
         #expect(moved.pan != fading.pan && moved.dimmer == 0)
         session.seek(to: 5.1)
@@ -162,6 +162,83 @@ struct StudioTests {
         #expect(reopened.lighting.cues.contains { $0.timelineCommand == .cyan })
         #expect(FixtureTimelineCommand(dragValue: FixtureTimelineCommand.cyan.dragValue) == .cyan)
         #expect(FixtureTimelineCommand(dragValue: "Cyan") == nil)
+    }
+
+    @Test func fiveSecondClipsTrimUndoAndRestoreTheUnderlyingProgram() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.rgb)
+        let fixture = try #require(session.project.lighting.fixtures.first)
+        let red = LightingCue(name: "Red base", time: 0, entries: [.init(id: fixture.id, state: .rgb(.red))])
+        let green = LightingCue(name: "Green base", time: 4, entries: [.init(id: fixture.id, state: .rgb(.green))])
+        session.setCue(red)
+        session.setCue(green)
+        #expect(session.placeTimelineCommand(.blue, fixtureID: fixture.id, at: 2))
+        let blue = try #require(session.cues.first { $0.timelineCommand == .blue })
+        #expect(blue.clipDuration == 5 && blue.end == 7)
+        #expect(session.placeTimelineCommand(.off, fixtureID: fixture.id, at: 3))
+        let off = try #require(session.cues.first { $0.timelineCommand == .off })
+        session.resizeClip(cueID: off.id, fixtureID: fixture.id, start: 3, end: 4.5)
+        session.seek(to: 1.999)
+        #expect(session.effectiveState(fixture) == .rgb(.red))
+        session.seek(to: 2)
+        #expect(session.effectiveState(fixture) == .rgb(.blue))
+        session.seek(to: 4)
+        #expect(session.effectiveState(fixture) == .rgb(.off))
+        session.seek(to: 4.5)
+        #expect(session.effectiveState(fixture) == .rgb(.blue))
+        session.seek(to: 7)
+        #expect(session.effectiveState(fixture) == .rgb(.green))
+
+        session.resizeClip(cueID: blue.id, fixtureID: fixture.id, start: 1, end: 9)
+        #expect(session.cues.first { $0.id == blue.id }?.clipDuration == 8)
+        session.moveFixtureCommand(cueID: blue.id, fixtureID: fixture.id, to: 10)
+        #expect(session.cues.first { $0.id == blue.id }?.end == 18)
+        #expect(session.project.duration == 18.5)
+        session.undoEdit()
+        session.undoEdit()
+        #expect(session.cues.first { $0.id == blue.id } == blue)
+        session.resizeClip(cueID: blue.id, fixtureID: fixture.id, start: 3, end: 3.01)
+        #expect(session.cues.first { $0.id == blue.id } == blue)
+
+        let url = directory.appendingPathComponent("Clips.lightshow")
+        try session.write(url)
+        let (reopened, _) = try ShowFiles.load(url)
+        #expect(reopened == session.project)
+        #expect(reopened.version == 3)
+        let legacy = LightShow(version: 2, lighting: ProjectLighting(controllers: reopened.lighting.controllers,
+                               fixtures: [fixture], cues: [red, green]))
+        let decodedLegacy = try JSONDecoder().decode(LightShow.self, from: JSONEncoder().encode(legacy))
+        try decodedLegacy.validate()
+        #expect(LightingSchedule(cues: decodedLegacy.lighting.cues).state(for: fixture, at: 20) == .rgb(.green))
+    }
+
+    @Test func clipsClampToTheSoundtrackAndKeepTheirLengthWhenMoved() throws {
+        let session = makeSession()
+        defer { session.finish() }
+        session.newShow()
+        session.addFixture(.plug)
+        let fixture = try #require(session.project.lighting.fixtures.first)
+        let track = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
+        defer { try? FileManager.default.removeItem(at: track) }
+        try writeSilentWAV(to: track)
+        try session.importSong(PreparedSoundtrack.read(track))
+        #expect(session.placeTimelineCommand(.on, fixtureID: fixture.id, at: 2))
+        let clip = try #require(session.cues.first)
+        #expect(clip.clipDuration == 1 && clip.end == session.project.duration)
+        session.moveSelectedCues(by: 5)
+        #expect(session.cues.first == clip)
+        session.moveSelectedCues(by: -1)
+        #expect(session.cues.first?.time == 1 && session.cues.first?.clipDuration == 1)
+        let moved = session.project
+        session.resizeClip(cueID: clip.id, fixtureID: fixture.id, start: 1, end: 3.5)
+        #expect(session.project == moved)
+        session.seek(to: 2)
+        #expect(session.effectiveState(fixture) == .plug(false))
     }
 
     @Test func fixtureTimelineSplitsSingleTileWithoutMovingTheOtherCommands() throws {

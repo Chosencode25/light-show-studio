@@ -86,7 +86,7 @@ struct PreparedSoundtrack: Sendable {
 }
 
 struct LightShow: Codable, Equatable, Sendable {
-    static let currentVersion = 2
+    static let currentVersion = 3
     var version = Self.currentVersion
     var id = UUID()
     var name = "Untitled Light Show"
@@ -98,7 +98,7 @@ struct LightShow: Codable, Equatable, Sendable {
     var markers: [TimelineMarker] { timeMarkers ?? [] }
 
     var duration: Double {
-        let programmingEnd = max(markers.map(\.time).max() ?? 0, lighting.cues.map(\.time).max() ?? 0,
+        let programmingEnd = max(markers.map(\.time).max() ?? 0, lighting.cues.map(\.end).max() ?? 0,
                                  lighting.positionKeys.map(\.time).max() ?? 0, chases.map(\.end).max() ?? 0)
         if let song { return song.duration }
         return min(3600, max(15, programmingEnd + 0.5))
@@ -112,7 +112,7 @@ struct LightShow: Codable, Equatable, Sendable {
             throw ShowError.invalid("Check the stage photo and timeline markers.")
         }
         if let issue = lighting.validationIssue() { throw ShowError.invalid(issue) }
-        if let song, lighting.cues.contains(where: { !$0.isManual && $0.time > song.duration }) ||
+        if let song, lighting.cues.contains(where: { !$0.isManual && $0.end > song.duration + 0.000001 }) ||
             lighting.positionKeys.contains(where: { $0.time > song.duration }) ||
             chases.contains(where: { $0.end > song.duration + 0.000001 }) || markers.contains(where: { $0.time > song.duration }) {
             throw ShowError.invalid("Timed cues, motion keys, and chases must fit inside the soundtrack.")

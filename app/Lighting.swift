@@ -280,6 +280,8 @@ struct LightingCue: Codable, Equatable, Identifiable, Sendable {
     var dimmerFade: Double?
     var manualOnly: Bool?
     var timelineCommand: FixtureTimelineCommand?
+    var clipDuration: Double?
+    var end: Double { time + (clipDuration ?? 0) }
     var isManual: Bool { manualOnly == true }
     var entries: [FixtureLookEntry]
 }
@@ -365,11 +367,23 @@ struct ProjectLighting: Codable, Equatable, Sendable {
         }
         guard looks.allSatisfy({ validName($0.name) && validEntries($0.entries) }) else { return "Invalid lighting look." }
         var times: [UUID: Set<Double>] = [:]
+        var clipStarts: [UUID: Set<Double>] = [:]
         for cue in cues {
             guard validName(cue.name), (0...3600).contains(cue.time), (0...3600).contains(cue.lead),
                   (0...3600).contains(cue.dimmerFade ?? 0), validEntries(cue.entries) else { return "Invalid lighting cue time, lead, or fixture state." }
-            for entry in cue.entries where !cue.isManual && !times[entry.id, default: []].insert(cue.time).inserted {
-                return "A fixture can only have one cue at a given time."
+            if let duration = cue.clipDuration {
+                guard duration >= CueTiming.minimumClipDuration - 0.000001,
+                      (0...3600.000001).contains(cue.end), !cue.isManual,
+                      cue.entries.allSatisfy({ cue.timelineCommand?.supports($0.state.kind) != false }) else {
+                    return "A clip must have a valid length, compatible fixtures, and fit inside the show."
+                }
+                for entry in cue.entries where !clipStarts[entry.id, default: []].insert(cue.time).inserted {
+                    return "Two clips on the same fixture can’t start at the same time."
+                }
+            } else {
+                for entry in cue.entries where !cue.isManual && !times[entry.id, default: []].insert(cue.time).inserted {
+                    return "A fixture can only have one cue at a given time."
+                }
             }
         }
         return nil
@@ -386,17 +400,47 @@ struct LightingSchedule {
         let state: FixtureState
     }
 
+    struct Clip {
+        let cue: LightingCue
+        let state: FixtureState
+        fileprivate let latestEnd: Double
+    }
+
     private var tracks: [UUID: [Change]] = [:]
+    private var clips: [UUID: [Clip]] = [:]
 
     init(cues: [LightingCue] = []) {
         for cue in cues.filter({ !$0.isManual }).sorted(by: { $0.time < $1.time }) {
             for entry in cue.entries {
+                if cue.clipDuration != nil {
+                    let latestEnd = max(cue.end, clips[entry.id]?.last?.latestEnd ?? 0)
+                    clips[entry.id, default: []].append(Clip(cue: cue, state: entry.state, latestEnd: latestEnd))
+                    continue
+                }
                 let previous = tracks[entry.id]?.last?.time ?? 0
                 tracks[entry.id, default: []].append(Change(
                     time: cue.time, leadStart: max(previous, cue.time - cue.lead), motionCurve: cue.motionCurve ?? .snap,
                     fadeStart: max(previous, cue.time - (cue.dimmerFade ?? 0)), state: entry.state))
             }
         }
+    }
+
+    func activeClips(for id: UUID, at time: Double) -> [Clip] {
+        guard let track = clips[id] else { return [] }
+        var lower = 0
+        var upper = track.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if track[middle].cue.time <= time { lower = middle + 1 }
+            else { upper = middle }
+        }
+        var active: [Clip] = []
+        for index in (0..<lower).reversed() {
+            let clip = track[index]
+            if clip.latestEnd <= time { break }
+            if time < clip.cue.end { active.append(clip) }
+        }
+        return active.reversed()
     }
 
     func hasCue(for id: UUID, from start: Double, through end: Double) -> Bool {

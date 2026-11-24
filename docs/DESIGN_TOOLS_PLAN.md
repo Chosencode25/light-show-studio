@@ -7,3 +7,7 @@ Let each cue edit its fixture targets and their saved settings, with temporary a
 ## Fixture timeline
 
 Display fixture rows beneath the shared soundtrack and cue group tracks. Use equal-size visual command tiles with a programmed state band and a toolbar for compatible fixture drops. Use existing cues, motion keys, and chases with no format change. Split multi-fixture cues transactionally when a single tile is retimed and retain whole-cue editing in the shared row. Window layout presets and docking are a separate milestone.
+
+## Clip duration
+
+Palette drops use five-second clips, shortened at the end of a soundtrack as needed. Drag a clip body to move it and either edge to trim it. Evaluate clips over existing programming and restore the underlying output at the end. When clips overlap, the most recently started clip takes precedence. Preserve older point cues and validate format and playback compatibility.

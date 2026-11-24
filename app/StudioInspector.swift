@@ -223,22 +223,38 @@ struct CueInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Selected Cue").font(.headline)
+                Text(cue.clipDuration == nil ? "Selected Cue" : "Selected Clip").font(.headline)
                 Spacer()
                 Button("Close Cue Inspector", systemImage: "xmark") { session.selectedCueID = nil }.labelStyle(.iconOnly)
             }
             Group {
                 TextField("Cue name", text: $cue.name)
                 LabeledContent("Time (seconds)") { TextField("Cue time", value: $cue.time, format: .number.precision(.fractionLength(3))).frame(width: 76) }
-                Toggle("Manual only", isOn: Binding(get: { cue.isManual }, set: { cue.manualOnly = $0 }))
-                if cue.entries.contains(where: { $0.state.kind == .movingHead }) {
-                    Picker("Motion", selection: Binding(get: { cue.motionCurve ?? .snap }, set: { cue.motionCurve = $0 })) {
-                        ForEach(CueCurve.allCases) { Text($0.rawValue).tag($0) }
+                if let duration = cue.clipDuration {
+                    LabeledContent("Length (seconds)") {
+                        TextField("Clip length", value: Binding(get: { cue.clipDuration ?? duration },
+                                                                  set: { cue.clipDuration = $0 }),
+                                  format: .number.precision(.fractionLength(3))).frame(width: 76)
                     }
-                    LabeledContent("Move lead (s)") { TextField("Move lead", value: $cue.lead, format: .number).frame(width: 76) }
-                    LabeledContent("Dimmer fade (s)") {
-                        TextField("Dimmer fade", value: Binding(get: { cue.dimmerFade ?? 0 }, set: { cue.dimmerFade = $0 }), format: .number)
-                            .frame(width: 76)
+                } else {
+                    Toggle("Manual only", isOn: Binding(get: { cue.isManual }, set: { cue.manualOnly = $0 }))
+                }
+                if cue.entries.contains(where: { $0.state.kind == .movingHead }) &&
+                    (cue.clipDuration == nil || cue.timelineCommand == .movement || cue.timelineCommand == .fade) {
+                    if cue.clipDuration == nil || cue.timelineCommand == .movement {
+                        Picker("Motion", selection: Binding(get: { cue.motionCurve ?? (cue.clipDuration == nil ? .snap : .linear) },
+                                                             set: { cue.motionCurve = $0 })) {
+                            ForEach(CueCurve.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                    }
+                    if cue.clipDuration == nil {
+                        LabeledContent("Move lead (s)") { TextField("Move lead", value: $cue.lead, format: .number).frame(width: 76) }
+                    }
+                    if cue.clipDuration == nil || cue.timelineCommand == .fade {
+                        LabeledContent("Dimmer fade (s)") {
+                            TextField("Dimmer fade", value: Binding(get: { cue.dimmerFade ?? 0 }, set: { cue.dimmerFade = $0 }), format: .number)
+                                .frame(width: 76)
+                        }
                     }
                 }
                 fixtureTargets
@@ -260,7 +276,8 @@ struct CueInspector: View {
                 Text("Cue Fixtures").font(.subheadline.bold())
                 Spacer()
                 let fixtures = session.project.lighting.fixtures.filter { fixture in
-                    !cue.entries.contains { $0.id == fixture.id }
+                    !cue.entries.contains { $0.id == fixture.id } &&
+                        (cue.clipDuration == nil || cue.timelineCommand?.supports(fixture.kind) != false)
                 }
                 Menu("Add Fixture") {
                     ForEach(fixtures) { fixture in
