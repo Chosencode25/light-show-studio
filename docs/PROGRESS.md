@@ -6,6 +6,8 @@ Added **Window → Layouts** with **Stage Design** for fixtures, stage preview, 
 
 Xcode 27.0 beta 5 (27A5237l) built the universal macOS 15 Release app with the `LightShowStudio` scheme. The app and the extracted ZIP passed strict signature verification and a file comparison. Running the Release test bundle directly passed 18 of 19 tests, including all three new layout tests. The tests cover docking on all four sides, panel closing, divider persistence, independent preset reset, and inserting, moving, and trimming clips in the same show across layout changes. The phone pairing test also failed on unchanged build 7 in this session, where loopback listener creation is denied. Xcode’s test launcher was blocked from reaching its test manager service.
 
+A fresh Release run with the pinned Xcode passed all 19 tests, including the local phone pairing test and the three layout tests. See [build history](BUILD_HISTORY.md) for the archived downloads and source tags.
+
 Hands-on verification is pending. Switch between presets with a show open and unsaved changes, and confirm the playhead and selections carry over. Dock panels on all four sides, drag the dividers, close a panel, reopen the app, and reset each layout. In Show Timing and in a docked timeline, check the waveform and rows, drop a palette command, drag its center, and trim both edges. Verify that the underlying cue resumes when the clip ends.
 
 ## November 24, 2026 · v0.3 build 7
